@@ -12,6 +12,8 @@ function AdminPanel() {
   // ─── Form state ───
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageSource, setImageSource] = useState('file');
   const [imagePrompt, setImagePrompt] = useState('');
   const [videoPrompt, setVideoPrompt] = useState('');
   const [formError, setFormError] = useState('');
@@ -38,6 +40,8 @@ function AdminPanel() {
   const [editingPromptId, setEditingPromptId] = useState(null);
   const [editImageFile, setEditImageFile] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState(null);
+  const [editImageUrl, setEditImageUrl] = useState('');
+  const [editImageSource, setEditImageSource] = useState('file');
   const [editImagePrompt, setEditImagePrompt] = useState('');
   const [editVideoPrompt, setEditVideoPrompt] = useState('');
   const [editSaving, setEditSaving] = useState(false);
@@ -94,9 +98,18 @@ function AdminPanel() {
   };
 
   // ─── Upload to Cloudinary ───
-  const uploadToCloudinary = async (file) => {
+  const uploadToCloudinary = async (input) => {
     const formData = new FormData();
-    formData.append('file', file);
+
+    if (typeof input === 'string') {
+      const response = await fetch(input);
+      if (!response.ok) throw new Error('Failed to fetch image from URL');
+      const blob = await response.blob();
+      formData.append('file', blob, 'image.jpg');
+    } else {
+      formData.append('file', input);
+    }
+
     formData.append('upload_preset', cloudinaryConfig.uploadPreset);
 
     const res = await fetch(cloudinaryConfig.uploadUrl, {
@@ -116,8 +129,12 @@ function AdminPanel() {
     setSuccessMsg('');
 
     // Validation
-    if (!imageFile) {
+    if (imageSource === 'file' && !imageFile) {
       setFormError('Please upload an image');
+      return;
+    }
+    if (imageSource === 'url' && !imageUrl.trim()) {
+      setFormError('Please paste an image URL');
       return;
     }
     if (!imagePrompt.trim() && !videoPrompt.trim()) {
@@ -127,13 +144,15 @@ function AdminPanel() {
 
     setSaving(true);
     try {
-      // 1. Upload image to Cloudinary
-      const imageUrl = await uploadToCloudinary(imageFile);
+      // 1. Upload image to Cloudinary (file or URL)
+      const finalImageUrl = imageSource === 'file'
+        ? await uploadToCloudinary(imageFile)
+        : await uploadToCloudinary(imageUrl.trim());
 
       // 2. Save to Supabase
       const { error } = await supabase.from('prompts').insert([
         {
-          image_url: imageUrl,
+          image_url: finalImageUrl,
           image_prompt: imagePrompt.trim() || null,
           video_prompt: videoPrompt.trim() || null,
           copy_count: 0,
@@ -146,6 +165,8 @@ function AdminPanel() {
       // Reset form
       setImageFile(null);
       setImagePreview(null);
+      setImageUrl('');
+      setImageSource('file');
       setImagePrompt('');
       setVideoPrompt('');
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -191,7 +212,9 @@ function AdminPanel() {
   const openEditModal = (prompt) => {
     setEditingPromptId(prompt.id);
     setEditImagePreview(prompt.image_url);
+    setEditImageUrl(prompt.image_url || '');
     setEditImageFile(null);
+    setEditImageSource('file');
     setEditImagePrompt(prompt.image_prompt || '');
     setEditVideoPrompt(prompt.video_prompt || '');
     setEditModalOpen(true);
@@ -202,6 +225,8 @@ function AdminPanel() {
     setEditModalOpen(false);
     document.body.style.overflow = 'unset';
     setEditingPromptId(null);
+    setEditImageUrl('');
+    setEditImageSource('file');
   };
 
   const handleEditImageSelect = (e) => {
@@ -220,15 +245,17 @@ function AdminPanel() {
 
     setEditSaving(true);
     try {
-      let imageUrl = editImagePreview;
-      if (editImageFile) {
-        imageUrl = await uploadToCloudinary(editImageFile);
+      let finalImageUrl = editImagePreview;
+      if (editImageSource === 'file' && editImageFile) {
+        finalImageUrl = await uploadToCloudinary(editImageFile);
+      } else if (editImageSource === 'url' && editImageUrl.trim() !== editImagePreview) {
+        finalImageUrl = await uploadToCloudinary(editImageUrl.trim());
       }
 
       const { error } = await supabase
         .from('prompts')
         .update({
-          image_url: imageUrl,
+          image_url: finalImageUrl,
           image_prompt: editImagePrompt.trim() || null,
           video_prompt: editVideoPrompt.trim() || null,
         })
@@ -272,8 +299,6 @@ function AdminPanel() {
             }}
             placeholder="Password"
             style={styles.passwordInput}
-            onFocus={(e) => (e.target.style.borderColor = '#0a6b5e')}
-            onBlur={(e) => (e.target.style.borderColor = '#e5e7eb')}
             autoFocus
           />
 
@@ -304,48 +329,98 @@ function AdminPanel() {
           {/* ── Image Upload ── */}
           <div style={styles.fieldGroup}>
             <label style={styles.label}>Image</label>
-            <div
-              style={{
-                ...styles.uploadArea,
-                ...(imagePreview ? styles.uploadAreaHasImage : {}),
-              }}
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const file = e.dataTransfer.files?.[0];
-                if (file && file.type.startsWith('image/')) {
-                  setImageFile(file);
-                  setImagePreview(URL.createObjectURL(file));
-                  setFormError('');
-                }
-              }}
-            >
-              {imagePreview ? (
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  style={styles.previewImg}
-                />
-              ) : (
-                <div style={styles.uploadPlaceholder}>
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <polyline points="21 15 16 10 5 21" />
-                  </svg>
-                  <span style={styles.uploadText}>Click to upload image</span>
-                  <span style={styles.uploadHint}>or drag and drop</span>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                style={{ display: 'none' }}
-              />
+
+            {/* Toggle */}
+            <div style={styles.sourceToggle}>
+              <button
+                type="button"
+                onClick={() => setImageSource('file')}
+                style={{
+                  ...styles.sourceBtn,
+                  ...(imageSource === 'file' ? styles.sourceBtnActive : {}),
+                }}
+              >
+                Upload File
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageSource('url')}
+                style={{
+                  ...styles.sourceBtn,
+                  ...(imageSource === 'url' ? styles.sourceBtnActive : {}),
+                }}
+              >
+                Paste URL
+              </button>
             </div>
+
+            {imageSource === 'file' ? (
+              /* File upload mode */
+              <div
+                style={{
+                  ...styles.uploadArea,
+                  ...(imagePreview ? styles.uploadAreaHasImage : {}),
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && file.type.startsWith('image/')) {
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
+                    setFormError('');
+                  }
+                }}
+              >
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" style={styles.previewImg} />
+                ) : (
+                  <div style={styles.uploadPlaceholder}>
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <span style={styles.uploadText}>Click to upload image</span>
+                    <span style={styles.uploadHint}>or drag and drop</span>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  style={{ display: 'none' }}
+                />
+              </div>
+            ) : (
+              /* URL input mode */
+              <div>
+                <input
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => {
+                    setImageUrl(e.target.value);
+                    setImagePreview(null);
+                    setFormError('');
+                  }}
+                  placeholder="https://example.com/image.jpg"
+                  style={{
+                    ...styles.urlInput,
+                    ...(imageUrl && imageUrl.trim() ? { borderColor: '#0a6b5e' } : {}),
+                  }}
+                />
+                {imageUrl && imageUrl.trim() && (
+                  <img
+                    src={imageUrl}
+                    alt="URL preview"
+                    style={{ ...styles.previewImg, marginTop: '12px', maxHeight: '280px', borderRadius: '12px', objectFit: 'cover', width: '100%' }}
+                    onError={(e) => { e.target.style.display = 'none'; }}
+                  />
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── Image Prompt ── */}
@@ -356,8 +431,6 @@ function AdminPanel() {
               onChange={(e) => setImagePrompt(e.target.value)}
               placeholder="Enter the prompt for AI image generation..."
               style={styles.textarea}
-              onFocus={(e) => (e.target.style.borderColor = '#0a6b5e')}
-              onBlur={(e) => (e.target.style.borderColor = '#e5e7eb')}
             />
           </div>
 
@@ -369,8 +442,6 @@ function AdminPanel() {
               onChange={(e) => setVideoPrompt(e.target.value)}
               placeholder="Enter the prompt for AI video generation..."
               style={styles.textarea}
-              onFocus={(e) => (e.target.style.borderColor = '#0a6b5e')}
-              onBlur={(e) => (e.target.style.borderColor = '#e5e7eb')}
             />
           </div>
 
@@ -450,11 +521,62 @@ function AdminPanel() {
             <form onSubmit={handleEditSubmit} style={styles.form}>
               <div style={styles.fieldGroup}>
                 <label style={styles.label}>Image</label>
-                <div style={styles.editImageWrapper}>
-                  <img src={editImagePreview} alt="Preview" style={styles.editPreviewImg} />
-                  <button type="button" className="interactive-btn" style={styles.editChangeImgBtn} onClick={() => editFileInputRef.current?.click()}>Change Image</button>
-                  <input ref={editFileInputRef} type="file" accept="image/*" onChange={handleEditImageSelect} style={{ display: 'none' }} />
+
+                {/* Toggle */}
+                <div style={styles.sourceToggle}>
+                  <button
+                    type="button"
+                    onClick={() => setEditImageSource('file')}
+                    style={{
+                      ...styles.sourceBtn,
+                      ...(editImageSource === 'file' ? styles.sourceBtnActive : {}),
+                    }}
+                  >
+                    Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditImageSource('url');
+                      setEditImageUrl(editImagePreview || '');
+                    }}
+                    style={{
+                      ...styles.sourceBtn,
+                      ...(editImageSource === 'url' ? styles.sourceBtnActive : {}),
+                    }}
+                  >
+                    Paste URL
+                  </button>
                 </div>
+
+                {editImageSource === 'file' ? (
+                  <div style={styles.editImageWrapper}>
+                    <img src={editImagePreview} alt="Preview" style={styles.editPreviewImg} />
+                    <button type="button" className="interactive-btn" style={styles.editChangeImgBtn} onClick={() => editFileInputRef.current?.click()}>Change Image</button>
+                    <input ref={editFileInputRef} type="file" accept="image/*" onChange={handleEditImageSelect} style={{ display: 'none' }} />
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="url"
+                      value={editImageUrl}
+                      onChange={(e) => setEditImageUrl(e.target.value)}
+                      placeholder="https://example.com/image.jpg"
+                      style={{
+                        ...styles.urlInput,
+                        ...(editImageUrl && editImageUrl.trim() ? { borderColor: '#0a6b5e' } : {}),
+                      }}
+                    />
+                    {editImageUrl && editImageUrl.trim() && (
+                      <img
+                        src={editImageUrl}
+                        alt="URL preview"
+                        style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '12px', marginTop: '12px' }}
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
               <div style={styles.fieldGroup}>
                 <label style={styles.label}>Image Prompt</label>
@@ -643,6 +765,43 @@ const styles = {
   },
 
   /* ─── Upload area ─── */
+  sourceToggle: {
+    display: 'flex',
+    gap: '0',
+    marginBottom: '12px',
+    borderRadius: '10px',
+    overflow: 'hidden',
+    border: '1.5px solid #e5e7eb',
+  },
+  sourceBtn: {
+    flex: 1,
+    padding: '9px 16px',
+    fontSize: '13px',
+    fontWeight: 600,
+    fontFamily: "'DM Sans', sans-serif",
+    border: 'none',
+    cursor: 'pointer',
+    background: '#ffffff',
+    color: '#6b7280',
+    transition: 'all 0.15s ease',
+    outline: 'none',
+  },
+  sourceBtnActive: {
+    background: '#0a6b5e',
+    color: '#ffffff',
+  },
+  urlInput: {
+    width: '100%',
+    padding: '12px 16px',
+    fontSize: '14px',
+    fontFamily: "'DM Sans', sans-serif",
+    border: '1.5px solid #e5e7eb',
+    borderRadius: '12px',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    boxSizing: 'border-box',
+  },
+
   uploadArea: {
     width: '100%',
     height: '200px',
