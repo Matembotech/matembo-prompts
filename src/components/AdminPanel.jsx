@@ -76,7 +76,7 @@ function AdminPanel() {
   // ─── Password check ───
   const handleLogin = (e) => {
     e.preventDefault();
-    if (passwordInput === ADMIN_PASSWORD) {
+    if (passwordInput === import.meta.env.VITE_ADMIN_PASSWORD) {
       setIsAuthed(true);
       setAuthError('');
     } else {
