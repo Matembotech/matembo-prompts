@@ -1,0 +1,37 @@
+import { Helmet } from 'react-helmet-async'
+
+const SITE_NAME = 'Matembo Prompts'
+const SITE_URL = 'https://matembo-prompts.netlify.app'
+const DEFAULT_TITLE = 'Matembo Prompts — AI Design Prompts'
+const DEFAULT_DESCRIPTION = 'Browse, copy and use professionally crafted prompts for AI image and video generation.'
+const DEFAULT_IMAGE = `${SITE_URL}/logo.webp`
+
+function SEO({ title, description, url, image }) {
+  const resolvedTitle = title ? `${title} | ${SITE_NAME}` : DEFAULT_TITLE
+  const resolvedDescription = description || DEFAULT_DESCRIPTION
+  const resolvedUrl = url || SITE_URL
+  const resolvedImage = image || DEFAULT_IMAGE
+
+  return (
+    <Helmet>
+      <title>{resolvedTitle}</title>
+      <meta name="description" content={resolvedDescription} />
+
+      <meta property="og:title" content={resolvedTitle} />
+      <meta property="og:description" content={resolvedDescription} />
+      <meta property="og:image" content={resolvedImage} />
+      <meta property="og:url" content={resolvedUrl} />
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content={SITE_NAME} />
+
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={resolvedTitle} />
+      <meta name="twitter:description" content={resolvedDescription} />
+      <meta name="twitter:image" content={resolvedImage} />
+
+      <link rel="canonical" href={resolvedUrl} />
+    </Helmet>
+  )
+}
+
+export default SEO

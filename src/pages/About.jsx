@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import SEO from '../components/SEO';
 
 function About() {
   useEffect(() => {
@@ -21,6 +22,12 @@ function About() {
   return (
     <div style={styles.container}>
       <style>{componentCSS}</style>
+
+      <SEO
+        title="About the Creator"
+        description="Meet Ibrahim Abdulrahman Maulid (Matembo) — software engineer, system architect, and founder of Matembo Prompts. Discover the story behind the AI prompt library."
+        url="https://matembo-prompts.netlify.app/about"
+      />
 
       {/* ── Section 1: Hero ── */}
       <section className="responsive-section" style={{ ...styles.sectionDark, ...styles.heroSection }}>

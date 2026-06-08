@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
 /* ── Tabler-style SVG icons (inline to avoid external deps) ── */
@@ -36,22 +36,6 @@ const IconBrokenImage = ({ size = 36, color = '#9ca3af' }) => (
   </svg>
 );
 
-const IconX = ({ size = 28, color = 'white' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const IconZoomIn = ({ size = 18, color = 'white' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    <line x1="11" y1="8" x2="11" y2="14" />
-    <line x1="8" y1="11" x2="14" y2="11" />
-  </svg>
-);
-
 /* ── Format count ── */
 function formatCount(n) {
   if (n >= 10000) return Math.floor(n / 1000) + 'k';
@@ -68,43 +52,9 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
   const [copiedVideo, setCopiedVideo] = useState(false);
   const [localCount, setLocalCount] = useState(copy_count || 0);
   const [hovered, setHovered] = useState(false);
-  const [imgHovered, setImgHovered] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [closing, setClosing] = useState(false);
 
   const hasImagePrompt = image_prompt && image_prompt.trim().length > 0;
   const hasVideoPrompt = video_prompt && video_prompt.trim().length > 0;
-
-  /* ─── Lightbox handlers ─── */
-  const openLightbox = () => {
-    if (imgError) return;
-    setLightboxOpen(true);
-    setClosing(false);
-  };
-
-  const closeLightbox = () => {
-    setClosing(true);
-    setTimeout(() => {
-      setLightboxOpen(false);
-      setClosing(false);
-    }, 250);
-  };
-
-  useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') closeLightbox();
-    };
-    if (lightboxOpen) {
-      window.addEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      window.removeEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'unset';
-    };
-  }, [lightboxOpen]);
 
   /* ─── Increment counter (optimistic + Supabase) ─── */
   const incrementCount = () => {
@@ -144,71 +94,8 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
     }
   };
 
-  const lightboxJSX = lightboxOpen ? createPortal(
-    <div
-      style={{
-        ...styles.lightboxOverlay,
-        opacity: closing ? 0 : 1,
-      }}
-      onClick={closeLightbox}
-    >
-      <button
-        style={styles.lightboxCloseBtn}
-        onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
-      >
-        <IconX />
-      </button>
-
-      <div
-        style={{
-          ...styles.lightboxContent,
-          transform: closing ? 'scale(0.92)' : 'scale(1)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <img src={image_url} alt="Lightbox" style={styles.lightboxImg} />
-        
-        {(hasImagePrompt || hasVideoPrompt) && (
-          <div style={styles.lightboxButtonRow}>
-            {hasImagePrompt && (
-              <button
-                onClick={handleCopyImage}
-                className="interactive-btn"
-                style={{
-                  ...styles.btnBase,
-                  ...(copiedImage ? styles.btnImageCopied : styles.lightboxBtnImageDefault),
-                }}
-              >
-                <IconPhoto size={14} color="#ffffff" />
-                <span>{copiedImage ? 'Copied! ✓' : 'Copy Image Prompt'}</span>
-              </button>
-            )}
-
-            {hasVideoPrompt && (
-              <button
-                onClick={handleCopyVideo}
-                className="interactive-btn"
-                style={{
-                  ...styles.btnBase,
-                  ...(copiedVideo ? styles.btnVideoCopied : styles.lightboxBtnVideoDefault),
-                }}
-              >
-                <IconVideo size={14} color="#ffffff" />
-                <span>{copiedVideo ? 'Copied! ✓' : 'Copy Video Prompt'}</span>
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body
-  ) : null;
-
   return (
-    <>
-      <div
+    <div
         style={{
           ...styles.card,
           ...(hovered ? styles.cardHover : {}),
@@ -217,37 +104,29 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
         onMouseLeave={() => setHovered(false)}
       >
         {/* ── Image ── */}
-        <div 
+        <Link
+          to={`/prompts/${id}`}
           style={{
             ...styles.imageWrapper,
-            cursor: imgError ? 'default' : 'zoom-in',
+            cursor: imgError ? 'default' : 'pointer',
+            display: 'block',
           }}
-          onMouseEnter={() => setImgHovered(true)}
-          onMouseLeave={() => setImgHovered(false)}
-          onClick={openLightbox}
+          onClick={(e) => imgError && e.preventDefault()}
         >
           {imgError ? (
             <div style={styles.placeholder}>
               <IconBrokenImage />
             </div>
           ) : (
-            <>
-              <img
-                src={image_url}
-                alt="AI prompt visual"
-                loading="lazy"
-                style={styles.image}
-                onError={() => setImgError(true)}
-              />
-              <div style={{
-                ...styles.zoomOverlay,
-                ...(imgHovered && !imgError ? styles.zoomOverlayVisible : {})
-              }}>
-                <IconZoomIn />
-              </div>
-            </>
+            <img
+              src={image_url}
+              alt="AI prompt visual"
+              loading="lazy"
+              style={styles.image}
+              onError={() => setImgError(true)}
+            />
           )}
-        </div>
+        </Link>
 
         {/* ── Body ── */}
         <div style={styles.body}>
@@ -293,8 +172,6 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
           </span>
         </div>
       </div>
-      {lightboxJSX}
-    </>
   );
 }
 
@@ -337,23 +214,6 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     background: '#f3f4f6',
-  },
-  zoomOverlay: {
-    position: 'absolute',
-    bottom: '10px',
-    right: '10px',
-    background: 'rgba(0,0,0,0.5)',
-    padding: '6px',
-    borderRadius: '8px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    opacity: 0,
-    transition: 'opacity 0.2s ease',
-    pointerEvents: 'none',
-  },
-  zoomOverlayVisible: {
-    opacity: 1,
   },
 
   /* Body */
@@ -418,69 +278,6 @@ const styles = {
     fontSize: '12px',
     color: '#6b7280',
     fontFamily: "'DM Sans', sans-serif",
-  },
-  
-  /* Lightbox */
-  lightboxOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    width: '100vw',
-    height: '100vh',
-    zIndex: 9999,
-    background: 'rgba(0, 0, 0, 0.92)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'opacity 0.25s ease',
-  },
-  lightboxCloseBtn: {
-    position: 'fixed',
-    top: '20px',
-    right: '24px',
-    background: 'rgba(255,255,255,0.1)',
-    borderRadius: '50%',
-    padding: '8px',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'background 0.2s ease',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10000,
-  },
-  lightboxContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '20px',
-    transition: 'transform 0.25s ease',
-    maxWidth: '90vw',
-    maxHeight: '90vh',
-    width: '100%',
-  },
-  lightboxImg: {
-    maxWidth: '90vw',
-    maxHeight: 'calc(90vh - 80px)', // Leave space for buttons
-    objectFit: 'contain',
-    display: 'block',
-  },
-  lightboxButtonRow: {
-    display: 'flex',
-    gap: '12px',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  lightboxBtnImageDefault: {
-    background: 'rgba(255, 255, 255, 0.1)',
-    color: '#ffffff',
-    border: '1.5px solid rgba(255, 255, 255, 0.3)',
-  },
-  lightboxBtnVideoDefault: {
-    background: '#0a6b5e',
-    color: '#ffffff',
-    border: '1.5px solid #0a6b5e',
   },
 };
 
