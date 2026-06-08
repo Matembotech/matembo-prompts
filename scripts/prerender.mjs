@@ -67,7 +67,7 @@ async function prerender() {
   if (!chromePath) {
     console.error('  ✗ Chrome/Chromium not found. Skipping prerender.');
     console.error('    Install: sudo apt install -y chromium-browser');
-    process.exitCode = 1;
+    process.exitCode = 0;
     return;
   }
 
