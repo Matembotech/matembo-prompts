@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://matembo-prompts.netlify.app/sitemap.xml
