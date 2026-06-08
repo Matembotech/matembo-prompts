@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import './App.css'
 import HeroSection from './components/HeroSection'
@@ -18,7 +19,13 @@ function HomePage() {
 function AppContent() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
-  
+
+  useEffect(() => {
+    window.gtag?.('config', 'G-F4GQN76CQ2', {
+      page_path: location.pathname + location.search,
+    });
+  }, [location]);
+
   return (
     <>
       <Routes>
