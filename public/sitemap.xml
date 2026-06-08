@@ -11,6 +11,16 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://matembo-prompts.netlify.app/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://matembo-prompts.netlify.app/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://matembo-prompts.netlify.app/prompts/14fb8456-de42-4ddc-9622-6e3f9ad0769b</loc>
     <lastmod>2026-06-08T06:04:42.137Z</lastmod>
     <changefreq>weekly</changefreq>

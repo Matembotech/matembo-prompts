@@ -57,6 +57,8 @@ function Footer() {
           <a href="#" onClick={scrollToTop} style={styles.link} className="footer-link">Home</a>
           <a href="#prompts-grid-section" onClick={scrollToPrompts} style={styles.link} className="footer-link">Explore</a>
           <Link to="/about" style={styles.link} className="footer-link">About</Link>
+          <Link to="/privacy" style={styles.link} className="footer-link">Privacy</Link>
+          <Link to="/terms" style={styles.link} className="footer-link">Terms</Link>
         </div>
 
         {/* Right */}

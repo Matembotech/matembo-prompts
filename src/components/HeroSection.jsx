@@ -213,8 +213,7 @@ function HeroSection() {
                   max-w-[420px] mb-8
                 "
               >
-                Browse, copy and use professionally crafted prompts for AI image
-                and video generation — all in one place.
+                Matembo Prompts — where AI creators come to steal prompts.
               </p>
 
               {/* CTA Buttons */}

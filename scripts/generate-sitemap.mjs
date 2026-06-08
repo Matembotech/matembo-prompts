@@ -38,6 +38,18 @@ function renderSitemap(prompts) {
     <priority>0.6</priority>
   </url>`);
 
+  urls.push(`  <url>
+    <loc>${SITE_URL}/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>`);
+
+  urls.push(`  <url>
+    <loc>${SITE_URL}/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>`);
+
   for (const p of prompts) {
     const lastmod = formatDate(p.created_at);
     const lastmodLine = lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : '';

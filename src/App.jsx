@@ -6,6 +6,8 @@ import HeroSection from './components/HeroSection'
 import PromptsGrid from './components/PromptsGrid'
 import AdminPanel from './components/AdminPanel'
 import About from './pages/About'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 import PromptDetail from './pages/PromptDetail'
 import NotFound from './pages/NotFound'
 import Footer from './components/Footer'
@@ -36,6 +38,8 @@ function AppContent() {
         <Route path="/" element={<HomePage />} />
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/about" element={<About />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
         <Route path="/prompts/:id" element={<PromptDetail />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
