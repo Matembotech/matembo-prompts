@@ -49,19 +49,47 @@ function PromptsGrid() {
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const PER_PAGE = 10;
+  const totalPages = Math.ceil(totalCount / PER_PAGE);
+  const needsPagination = totalCount > PER_PAGE;
 
   /* ─── Fetch prompts ─── */
-  const fetchPrompts = async () => {
+  const fetchPrompts = async (page = 1) => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
+      const { count, error: countError } = await supabase
         .from('prompts')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact', head: true });
 
-      if (fetchError) throw fetchError;
-      setPrompts(data || []);
+      if (countError) throw countError;
+      setTotalCount(count);
+
+      if (count <= PER_PAGE) {
+        const { data, error: fetchError } = await supabase
+          .from('prompts')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (fetchError) throw fetchError;
+        setPrompts(data || []);
+        setCurrentPage(1);
+      } else {
+        const from = (page - 1) * PER_PAGE;
+        const to = from + PER_PAGE - 1;
+
+        const { data, error: fetchError } = await supabase
+          .from('prompts')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (fetchError) throw fetchError;
+        setPrompts(data || []);
+      }
     } catch (err) {
       console.error('Error fetching prompts:', err);
       setError(err.message || 'Failed to load prompts');
@@ -70,10 +98,19 @@ function PromptsGrid() {
     }
   };
 
+  /* ─── Pagination handler ─── */
+  const goToPage = (page) => {
+    setCurrentPage(page);
+    fetchPrompts(page);
+    const el = document.getElementById('prompts-grid-section');
+    if (el) window.scrollTo({ top: el.offsetTop - 100, behavior: 'smooth' });
+  };
+
   useEffect(() => {
     fetchPrompts();
 
-    /* ─── Realtime subscription ─── */
+    if (needsPagination) return;
+
     const channel = supabase
       .channel('prompts-realtime')
       .on(
@@ -81,6 +118,7 @@ function PromptsGrid() {
         { event: 'INSERT', schema: 'public', table: 'prompts' },
         (payload) => {
           setPrompts((prev) => [payload.new, ...prev]);
+          setTotalCount((prev) => prev + 1);
         }
       )
       .subscribe();
@@ -89,6 +127,23 @@ function PromptsGrid() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  /* ─── Build page numbers ─── */
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   /* ═══ RENDER ═══ */
   return (
@@ -150,6 +205,52 @@ function PromptsGrid() {
               />
             ))}
           </div>
+        )}
+
+        {/* ── Pagination ── */}
+        {!loading && !error && needsPagination && prompts.length > 0 && (
+          <div style={styles.pagination}>
+            <button
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage === 1}
+              style={{
+                ...styles.pageBtn,
+                ...(currentPage === 1 ? styles.pageBtnDisabled : {}),
+              }}
+            >
+              ← Previous
+            </button>
+
+            {getPageNumbers().map((page) => (
+              <button
+                key={page}
+                onClick={() => goToPage(page)}
+                style={{
+                  ...styles.pageBtn,
+                  ...(page === currentPage ? styles.pageBtnActive : {}),
+                }}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              style={{
+                ...styles.pageBtn,
+                ...(currentPage >= totalPages ? styles.pageBtnDisabled : {}),
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && needsPagination && prompts.length > 0 && (
+          <p style={styles.pageInfo}>
+            Page {currentPage} of {totalPages} ({totalCount} prompts)
+          </p>
         )}
       </section>
     </>
@@ -297,6 +398,49 @@ const styles = {
     fontFamily: "'DM Sans', sans-serif",
     cursor: 'pointer',
     transition: 'all 0.2s ease',
+  },
+
+  /* Pagination */
+  pagination: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '6px',
+    marginTop: '40px',
+    flexWrap: 'wrap',
+  },
+  pageBtn: {
+    minWidth: '40px',
+    height: '40px',
+    padding: '0 12px',
+    borderRadius: '10px',
+    border: '1.5px solid #e5e7eb',
+    background: '#ffffff',
+    color: '#374151',
+    fontSize: '14px',
+    fontWeight: 600,
+    fontFamily: "'DM Sans', sans-serif",
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageBtnActive: {
+    background: '#0a6b5e',
+    color: '#ffffff',
+    borderColor: '#0a6b5e',
+  },
+  pageBtnDisabled: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+  },
+  pageInfo: {
+    textAlign: 'center',
+    fontSize: '13px',
+    color: '#9ca3af',
+    marginTop: '12px',
+    fontFamily: "'DM Sans', sans-serif",
   },
 };
 
