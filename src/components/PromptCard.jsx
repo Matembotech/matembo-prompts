@@ -103,6 +103,7 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
+        <style>{btnCSS}</style>
         {/* ── Image ── */}
         <Link
           to={`/prompts/${id}`}
@@ -136,7 +137,7 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
               {hasImagePrompt && (
                 <button
                   onClick={handleCopyImage}
-                  className="interactive-btn"
+                  className="interactive-btn prompt-card-btn"
                   style={{
                     ...styles.btnBase,
                     ...(copiedImage ? styles.btnImageCopied : styles.btnImageDefault),
@@ -150,7 +151,7 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
               {hasVideoPrompt && (
                 <button
                   onClick={handleCopyVideo}
-                  className="interactive-btn"
+                  className="interactive-btn prompt-card-btn"
                   style={{
                     ...styles.btnBase,
                     ...(copiedVideo ? styles.btnVideoCopied : styles.btnVideoDefault),
@@ -227,6 +228,7 @@ const styles = {
   /* Buttons */
   btnBase: {
     flex: 1,
+    minWidth: 0,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -282,3 +284,13 @@ const styles = {
 };
 
 export default PromptCard;
+
+const btnCSS = `
+  @media (max-width: 600px) {
+    .prompt-card-btn {
+      font-size: 11px !important;
+      padding: 7px 10px !important;
+      min-width: 0;
+    }
+  }
+`;

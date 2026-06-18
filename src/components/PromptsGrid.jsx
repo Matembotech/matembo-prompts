@@ -285,7 +285,7 @@ const componentCSS = `
 
 @media (max-width: 600px) {
   .prompts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 `;
