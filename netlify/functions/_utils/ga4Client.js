@@ -2,8 +2,11 @@ import { BetaAnalyticsDataClient } from '@google-analytics/data';
 
 const projectId = process.env.GOOGLE_PROJECT_ID;
 const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-// Handle Netlify env variables which may escape newlines
-const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+// Handle Netlify env variables which may escape newlines or include surrounding quotes
+let rawKey = process.env.GOOGLE_PRIVATE_KEY || '';
+// Remove surrounding quotes and trim whitespace if the user pasted them
+rawKey = rawKey.trim().replace(/^["']|["']$/g, '');
+const privateKey = rawKey.replace(/\\n/g, '\n');
 
 export const propertyId = process.env.GA4_PROPERTY_ID;
 
