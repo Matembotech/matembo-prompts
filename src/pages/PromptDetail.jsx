@@ -88,8 +88,9 @@ function DetailSkeleton() {
 }
 
 function PromptDetail() {
-  const { id } = useParams();
+  const { slug } = useParams();
   const [prompt, setPrompt] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -97,6 +98,7 @@ function PromptDetail() {
   const [imgError, setImgError] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
   const [copiedVideo, setCopiedVideo] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [localCount, setLocalCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -109,11 +111,12 @@ function PromptDetail() {
     setLoading(true);
     setError(null);
     setNotFound(false);
+    window.scrollTo(0, 0);
 
     supabase
       .from('prompts')
       .select('*')
-      .eq('id', id)
+      .eq('slug', slug)
       .single()
       .then(({ data, error: fetchError }) => {
         if (fetchError) {
@@ -125,11 +128,29 @@ function PromptDetail() {
         } else {
           setPrompt(data);
           setLocalCount(data.copy_count || 0);
+          
+          // Increment view count in background
+          supabase
+            .from('prompts')
+            .update({ view_count: (data.view_count || 0) + 1 })
+            .eq('id', data.id)
+            .then(() => {});
+
+          // Fetch Recommendations
+          supabase
+            .from('prompts')
+            .select('id, slug, title, image_url, image_prompt, video_prompt, copy_count')
+            .neq('id', data.id)
+            .order('created_at', { ascending: false })
+            .limit(3)
+            .then(({ data: recData }) => {
+              if (recData) setRecommendations(recData);
+            });
         }
       })
       .catch((err) => setError(err.message || 'Failed to load prompt'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [slug]);
 
   /* ─── Lightbox handlers ─── */
   const openLightbox = () => {
@@ -169,7 +190,7 @@ function PromptDetail() {
     supabase
       .from('prompts')
       .update({ copy_count: newCount })
-      .eq('id', id)
+      .eq('id', prompt?.id)
       .then(({ error: updateError }) => {
         if (updateError) console.error('Failed to update copy_count:', updateError);
       });
@@ -198,16 +219,30 @@ function PromptDetail() {
     }
   };
 
-  /* ─── SEO data ─── */
-  const seoTitle = prompt?.image_prompt
-    ? prompt.image_prompt.slice(0, 60).replace(/\s+\S*$/, '')
-    : 'AI Prompt';
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch (err) {
+      console.error('Copy link failed:', err);
+    }
+  };
 
-  const seoDescription = hasVideoPrompt
-    ? prompt.video_prompt.slice(0, 160)
-    : hasImagePrompt
-      ? prompt.image_prompt.slice(0, 160)
-      : undefined;
+  /* ─── SEO data ─── */
+  const seoTitle = prompt?.title 
+    ? prompt.title 
+    : prompt?.image_prompt
+      ? prompt.image_prompt.slice(0, 60).replace(/\s+\S*$/, '')
+      : 'AI Prompt';
+
+  const seoDescription = prompt?.description
+    ? prompt.description
+    : hasVideoPrompt
+      ? prompt.video_prompt.slice(0, 160)
+      : hasImagePrompt
+        ? prompt.image_prompt.slice(0, 160)
+        : undefined;
 
   const SITE_URL = 'https://matembo-prompts.netlify.app';
 
@@ -302,8 +337,8 @@ function PromptDetail() {
       <SEO
         title={seoTitle}
         description={seoDescription}
-        url={`${SITE_URL}/prompts/${id}`}
-        image={prompt.image_url}
+        url={`${SITE_URL}/prompts/${slug}`}
+        image={prompt?.image_url}
       />
 
       {/* ── Hero / Header ── */}
@@ -345,21 +380,33 @@ function PromptDetail() {
 
           {/* ── Prompt Content ── */}
           <div style={styles.contentCol}>
+            
+            {/* Title & Description */}
+            <div style={styles.metaBlock}>
+              <h1 style={styles.detailTitle}>{prompt.title || 'AI Prompt'}</h1>
+              {prompt.description && <p style={styles.detailDesc}>{prompt.description}</p>}
+            </div>
+
             {hasImagePrompt && (
               <div style={styles.promptBlock}>
                 <h3 style={styles.promptLabel}>Image Prompt</h3>
                 <p style={styles.promptText}>{prompt.image_prompt}</p>
-                <button
-                  onClick={handleCopyImage}
-                  className="interactive-btn"
-                  style={{
-                    ...styles.copyBtn,
-                    ...(copiedImage ? styles.copyBtnCopied : styles.copyBtnDefault),
-                  }}
-                >
-                  <IconPhoto size={14} color={copiedImage ? '#ffffff' : '#0a6b5e'} />
-                  <span>{copiedImage ? 'Copied! ✓' : 'Copy Image Prompt'}</span>
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleCopyImage}
+                    className="interactive-btn"
+                    style={{
+                      ...styles.copyBtn,
+                      ...(copiedImage ? styles.copyBtnCopied : styles.copyBtnDefault),
+                    }}
+                  >
+                    <IconPhoto size={14} color={copiedImage ? '#ffffff' : '#0a6b5e'} />
+                    <span>{copiedImage ? 'Copied! ✓' : 'Copy Image Prompt'}</span>
+                  </button>
+                  <button onClick={handleCopyLink} className="interactive-btn" style={styles.shareBtn}>
+                    {copiedLink ? 'Link Copied! ✓' : 'Share Link'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -367,17 +414,24 @@ function PromptDetail() {
               <div style={styles.promptBlock}>
                 <h3 style={styles.promptLabel}>Video Prompt</h3>
                 <p style={styles.promptText}>{prompt.video_prompt}</p>
-                <button
-                  onClick={handleCopyVideo}
-                  className="interactive-btn"
-                  style={{
-                    ...styles.copyBtn,
-                    ...(copiedVideo ? styles.copyBtnVideoCopied : styles.copyBtnVideoDefault),
-                  }}
-                >
-                  <IconVideo size={14} color="#ffffff" />
-                  <span>{copiedVideo ? 'Copied! ✓' : 'Copy Video Prompt'}</span>
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleCopyVideo}
+                    className="interactive-btn"
+                    style={{
+                      ...styles.copyBtn,
+                      ...(copiedVideo ? styles.copyBtnVideoCopied : styles.copyBtnVideoDefault),
+                    }}
+                  >
+                    <IconVideo size={14} color="#ffffff" />
+                    <span>{copiedVideo ? 'Copied! ✓' : 'Copy Video Prompt'}</span>
+                  </button>
+                  {!hasImagePrompt && (
+                    <button onClick={handleCopyLink} className="interactive-btn" style={styles.shareBtn}>
+                      {copiedLink ? 'Link Copied! ✓' : 'Share Link'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -391,6 +445,28 @@ function PromptDetail() {
           </div>
         </div>
       </section>
+
+      {/* ── Recommendations ── */}
+      {recommendations.length > 0 && (
+        <section style={styles.recommendationsSection}>
+          <div style={styles.recContainer}>
+            <h3 style={styles.recHeading}>You May Also Like</h3>
+            <div className="detail-rec-grid">
+              {recommendations.map(rec => (
+                <Link to={`/prompts/${rec.slug || rec.id}`} key={rec.id} style={styles.recCard}>
+                  <div style={styles.recImageWrapper}>
+                    <img src={rec.image_url} alt={rec.title || 'Recommended Prompt'} style={styles.recImage} loading="lazy" />
+                  </div>
+                  <div style={styles.recBody}>
+                    <h4 style={styles.recTitle}>{rec.title || 'AI Prompt'}</h4>
+                    <p style={styles.recViews}>{formatCount(rec.copy_count || 0)} used this</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {lightboxJSX}
     </div>
@@ -412,6 +488,22 @@ const componentCSS = `
     .detail-hero-layout {
       flex-direction: column !important;
       align-items: center;
+    }
+  }
+
+  .detail-rec-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  @media (max-width: 900px) {
+    .detail-rec-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 600px) {
+    .detail-rec-grid {
+      grid-template-columns: 1fr;
     }
   }
 `;
@@ -515,7 +607,26 @@ const styles = {
     flex: '1 1 400px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '32px',
+    gap: '24px',
+  },
+
+  /* Meta block */
+  metaBlock: {
+    marginBottom: '8px',
+  },
+  detailTitle: {
+    fontFamily: "'Syne', sans-serif",
+    fontSize: '32px',
+    fontWeight: '800',
+    color: '#0d0d0d',
+    margin: '0 0 12px 0',
+    lineHeight: '1.2',
+  },
+  detailDesc: {
+    fontSize: '16px',
+    color: '#4b5563',
+    lineHeight: '1.6',
+    margin: '0',
   },
 
   /* Prompt blocks */
@@ -578,6 +689,21 @@ const styles = {
     color: '#ffffff',
     borderColor: '#085048',
   },
+  shareBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '10px 20px',
+    borderRadius: '999px',
+    fontSize: '14px',
+    fontWeight: '700',
+    fontFamily: "'DM Sans', sans-serif",
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    background: '#f3f4f6',
+    color: '#374151',
+    border: '1.5px solid #e5e7eb',
+  },
 
   /* Counter */
   counter: {
@@ -625,6 +751,62 @@ const styles = {
     fontSize: '15px',
     transition: 'all 0.3s',
     fontFamily: "'DM Sans', sans-serif",
+  },
+
+  /* Recommendations */
+  recommendationsSection: {
+    background: '#f9fafb',
+    padding: '80px 8%',
+    borderTop: '1px solid #e5e7eb',
+  },
+  recContainer: {
+    maxWidth: '1400px',
+    margin: '0 auto',
+  },
+  recHeading: {
+    fontFamily: "'Syne', sans-serif",
+    fontSize: '28px',
+    fontWeight: '800',
+    color: '#0d0d0d',
+    marginBottom: '32px',
+  },
+  recCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    background: '#ffffff',
+    borderRadius: '16px',
+    overflow: 'hidden',
+    textDecoration: 'none',
+    border: '1px solid #e5e7eb',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+  },
+  recImageWrapper: {
+    width: '100%',
+    height: '200px',
+    background: '#f3f4f6',
+  },
+  recImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  recBody: {
+    padding: '16px',
+  },
+  recTitle: {
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#0d0d0d',
+    margin: '0 0 8px 0',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  recViews: {
+    fontSize: '13px',
+    color: '#6b7280',
+    margin: '0',
   },
 
   /* Lightbox */

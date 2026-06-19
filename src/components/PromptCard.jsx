@@ -46,7 +46,7 @@ function formatCount(n) {
 /* ══════════════════════════════════════════════
    PROMPT CARD COMPONENT
    ══════════════════════════════════════════════ */
-function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
+function PromptCard({ id, slug, title, image_url, image_prompt, video_prompt, copy_count }) {
   const [imgError, setImgError] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
   const [copiedVideo, setCopiedVideo] = useState(false);
@@ -106,7 +106,7 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
         <style>{btnCSS}</style>
         {/* ── Image ── */}
         <Link
-          to={`/prompts/${id}`}
+          to={`/prompts/${slug || id}`}
           style={{
             ...styles.imageWrapper,
             cursor: imgError ? 'default' : 'pointer',
@@ -131,6 +131,7 @@ function PromptCard({ id, image_url, image_prompt, video_prompt, copy_count }) {
 
         {/* ── Body ── */}
         <div style={styles.body}>
+          {title && <h3 style={styles.cardTitle}>{title}</h3>}
           {/* Copy Buttons */}
           {(hasImagePrompt || hasVideoPrompt) && (
             <div className="flex flex-col xl:flex-row gap-[10px]">
@@ -223,6 +224,16 @@ const styles = {
     borderLeft: '0.5px solid #e5e7eb',
     borderRight: '0.5px solid #e5e7eb',
     background: '#ffffff',
+  },
+  cardTitle: {
+    fontSize: '15px',
+    fontWeight: 700,
+    color: '#0d0d0d',
+    margin: '0 0 12px 0',
+    fontFamily: "'DM Sans', sans-serif",
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
 
   /* Buttons */

@@ -40,7 +40,7 @@ function AppContent() {
         <Route path="/about" element={<About />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
-        <Route path="/prompts/:id" element={<PromptDetail />} />
+        <Route path="/prompts/:slug" element={<PromptDetail />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       {!isAdmin && <Footer />}

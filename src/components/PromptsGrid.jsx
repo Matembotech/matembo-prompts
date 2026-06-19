@@ -198,6 +198,8 @@ function PromptsGrid() {
               <PromptCard
                 key={prompt.id}
                 id={prompt.id}
+                slug={prompt.slug}
+                title={prompt.title}
                 image_url={prompt.image_url}
                 image_prompt={prompt.image_prompt}
                 video_prompt={prompt.video_prompt}
