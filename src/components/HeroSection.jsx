@@ -40,6 +40,8 @@ function HeroSection() {
             <img
               src="/logo.webp"
               alt="Matembo Prompts Logo"
+              fetchpriority="high"
+              loading="eager"
               className="w-9 h-9 rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
             />
             <div className="flex flex-col">
@@ -299,6 +301,8 @@ function HeroSection() {
                   <img
                     src="/hero/hero-main.png"
                     alt="AI-generated cinematic visual — futuristic portrait with teal accents"
+                    fetchpriority="high"
+                    loading="eager"
                     className="
                       w-full h-full object-cover
                       scale-110 -translate-x-2 translate-y-3
