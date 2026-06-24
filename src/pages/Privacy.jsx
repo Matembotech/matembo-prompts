@@ -68,8 +68,8 @@ function Privacy() {
               <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" style={styles.link}>Supabase Privacy Policy</a>.
             </p>
             <p style={styles.text}>
-              <strong>Netlify</strong> — hosts and serves this website. Netlify may collect standard server logs.{' '}
-              <a href="https://www.netlify.com/privacy/" target="_blank" rel="noopener noreferrer" style={styles.link}>Netlify Privacy Policy</a>.
+              <strong>Vercel</strong> — hosts and serves this website. Vercel may collect standard server logs.{' '}
+              <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" style={styles.link}>Vercel Privacy Policy</a>.
             </p>
           </div>
 

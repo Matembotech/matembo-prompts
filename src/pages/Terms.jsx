@@ -96,9 +96,7 @@ function Terms() {
             <h2 style={styles.sectionTitle}>10. Contact</h2>
             <p style={styles.text}>
               For questions about these Terms of Service, contact us at{' '}
-              <a href="mailto:matembotech@gmail.com" style={styles.link}>matembotech@gmail.com</a>{' '}
-              or visit{' '}
-              <a href="https://company-profile-navy-six.vercel.app/" target="_blank" rel="noopener noreferrer" style={styles.link}>Matembo Tech</a>.
+              <a href="mailto:ibrahimmaulid551@gmail.com" style={styles.link}>ibrahimmaulid551@gmail.com</a>
             </p>
           </div>
         </div>
