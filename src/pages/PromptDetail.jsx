@@ -136,15 +136,19 @@ function PromptDetail() {
             .eq('id', data.id)
             .then(() => {});
 
-          // Fetch Recommendations
+          // Fetch Recommendations (randomize from recent 20)
           supabase
             .from('prompts')
             .select('id, slug, title, image_url, image_prompt, video_prompt, copy_count')
             .neq('id', data.id)
             .order('created_at', { ascending: false })
-            .limit(3)
+            .limit(20)
             .then(({ data: recData }) => {
-              if (recData) setRecommendations(recData);
+              if (recData && recData.length > 0) {
+                // Shuffle array to show different prompts each time
+                const shuffled = [...recData].sort(() => 0.5 - Math.random());
+                setRecommendations(shuffled.slice(0, 3));
+              }
             });
         }
       })
