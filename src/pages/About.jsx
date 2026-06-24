@@ -33,7 +33,7 @@ function About() {
       <section className="responsive-section" style={{ ...styles.sectionDark, ...styles.heroSection }}>
         <div style={styles.heroNav}>
           <Link to="/" style={styles.heroLogo}>
-            <img src="/logo.webp" alt="Matembo Prompts Logo" style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover' }} />
+            <img src="/logo.webp" alt="Matembo Prompts Logo" fetchpriority="high" loading="eager" style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover' }} />
             <span style={{ color: '#fff' }}>Matembo Prompts</span>
           </Link>
           <Link to="/" style={styles.backLink}>Back to Prompts</Link>
@@ -55,7 +55,7 @@ function About() {
           <div className="reveal" style={styles.heroRight}>
             <div className="image-wrapper">
               <div className="color-block" style={{ background: '#0a6b5e', top: '20px', left: '20px' }} />
-              <img src="/creator.png" alt="Creator" className="image-bw" />
+              <img src="/creator.png" alt="Creator" fetchpriority="high" loading="eager" className="image-bw" />
             </div>
           </div>
         </div>
@@ -85,7 +85,7 @@ function About() {
             <div style={styles.colRight}>
               <div className="image-wrapper">
                 <div className="color-block" style={{ background: '#e8521a', top: '20px', right: '20px', left: 'auto' }} />
-                <img src="/prompt.jpeg" alt="Story" className="image-bw" />
+                <img src="/prompt.jpeg" alt="Story" loading="lazy" className="image-bw" />
               </div>
             </div>
           </div>
@@ -191,7 +191,7 @@ function About() {
             <div style={styles.colRight}>
               <div className="image-wrapper" style={{ maxWidth: '500px' }}>
                 <div className="color-block" style={{ background: '#e8521a', bottom: '-20px', right: '-20px', left: 'auto', top: 'auto' }} />
-                <img src="/logo.webp" alt="Projects" className="image-bw" />
+                <img src="/logo.webp" alt="Projects" loading="lazy" className="image-bw" />
               </div>
             </div>
           </div>
