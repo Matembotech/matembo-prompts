@@ -37,17 +37,24 @@ function Privacy() {
           </div>
 
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>2. Cookies</h2>
+            <h2 style={styles.sectionTitle}>2. Cookies and Advertising</h2>
             <p style={styles.text}>
-              Google Analytics uses first-party cookies to track visitor interactions. These cookies store anonymized identifiers and session data. You can disable cookies in your browser settings or use browser extensions to block Google Analytics tracking.
+              We use cookies to personalize content and ads, to provide social media features, and to analyze our traffic. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to our website or other websites.
             </p>
             <p style={styles.text}>
-              We do not use any other cookies or tracking technologies beyond Google Analytics.
+              Google's use of advertising cookies enables it and its partners to serve ads to our users based on their visit to our sites and/or other sites on the Internet.
+            </p>
+            <p style={styles.text}>
+              Users may opt out of personalized advertising by visiting <a href="https://www.google.com/settings/ads" target="_blank" rel="noopener noreferrer" style={styles.link}>Ads Settings</a>.
             </p>
           </div>
 
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>3. Third-Party Services</h2>
+            <p style={styles.text}>
+              <strong>Google AdSense</strong> — uses cookies (such as the DoubleClick cookie) to serve personalized ads. For more information on how Google uses data when you use their partners' sites, visit{' '}
+              <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener noreferrer" style={styles.link}>How Google uses data</a>.
+            </p>
             <p style={styles.text}>
               <strong>Google Analytics</strong> — processes anonymized traffic data. Google's privacy policy applies to the data they collect. Learn more at{' '}
               <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" style={styles.link}>Google's Privacy Policy</a>.

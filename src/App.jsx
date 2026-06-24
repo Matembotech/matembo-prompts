@@ -11,6 +11,7 @@ import Terms from './pages/Terms'
 import PromptDetail from './pages/PromptDetail'
 import NotFound from './pages/NotFound'
 import Footer from './components/Footer'
+import CookieConsent from './components/CookieConsent'
 
 function HomePage() {
   return (
@@ -44,6 +45,7 @@ function AppContent() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       {!isAdmin && <Footer />}
+      <CookieConsent />
     </>
   )
 }
