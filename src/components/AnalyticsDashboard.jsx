@@ -28,10 +28,10 @@ export default function AnalyticsDashboard({ isMobile, isTablet }) {
 
     try {
       const urls = [
-        `/.netlify/functions/analytics-overview?days=${days}`,
-        `/.netlify/functions/analytics-top-pages?days=${days}`,
-        `/.netlify/functions/analytics-countries?days=${days}`,
-        `/.netlify/functions/analytics-devices?days=${days}`
+        `/api/analytics-overview?days=${days}`,
+        `/api/analytics-top-pages?days=${days}`,
+        `/api/analytics-countries?days=${days}`,
+        `/api/analytics-devices?days=${days}`
       ];
 
       const responses = await Promise.all(urls.map(url => fetch(url, { headers })));

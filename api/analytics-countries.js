@@ -1,13 +1,13 @@
 import { propertyId, runCachedReport } from './_utils/ga4Client.js';
 
-export const handler = async (event) => {
-  const authHeader = event.headers['x-admin-secret'];
+export default async function handler(req, res) {
+  const authHeader = req.headers['x-admin-secret'];
   const expectedAuth = process.env.VITE_ADMIN_PASSWORD?.replace(/^"|"$/g, '');
   if (authHeader !== expectedAuth) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const days = event.queryStringParameters?.days || '7';
+  const days = req.query.days || '7';
 
   try {
     const response = await runCachedReport(`countries_${days}`, {
@@ -24,13 +24,9 @@ export const handler = async (event) => {
       users: parseInt(row.metricValues?.[0]?.value || '0', 10),
     }));
 
-    return { 
-      statusCode: 200, 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data) 
-    };
+    return res.status(200).json(data);
   } catch (error) {
     console.error('Countries Error:', error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Failed to fetch countries' }) };
+    return res.status(500).json({ error: 'Failed to fetch countries' });
   }
-};
+}

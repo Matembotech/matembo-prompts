@@ -1,20 +1,15 @@
 import { propertyId, runCachedReport } from './_utils/ga4Client.js';
 
-export const handler = async (event, context) => {
-  // Simple auth check via header (Optional, but good practice for admin routes)
-  const authHeader = event.headers['x-admin-secret'];
-  console.log("Expected Auth:", process.env.VITE_ADMIN_PASSWORD);
-  console.log("Received Auth:", authHeader);
-  
-  // Normalize quotes just in case dotenv loaded them differently in Node vs Vite
+export default async function handler(req, res) {
+  // Auth check
+  const authHeader = req.headers['x-admin-secret'];
   const expectedAuth = process.env.VITE_ADMIN_PASSWORD?.replace(/^"|"$/g, '');
-  
   if (authHeader !== expectedAuth) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const days = event.queryStringParameters?.days || '7';
-  
+  const days = req.query.days || '7';
+
   try {
     const response = await runCachedReport(`overview_${days}`, {
       property: `properties/${propertyId}`,
@@ -25,7 +20,7 @@ export const handler = async (event, context) => {
     });
 
     if (!response || !response.rows) {
-      return { statusCode: 200, body: JSON.stringify({ totals: { activeUsers: 0, newUsers: 0, sessions: 0 }, trend: [] }) };
+      return res.status(200).json({ totals: { activeUsers: 0, newUsers: 0, sessions: 0 }, trend: [] });
     }
 
     const trend = response.rows.map(row => ({
@@ -44,13 +39,9 @@ export const handler = async (event, context) => {
       return acc;
     }, { activeUsers: 0, newUsers: 0, sessions: 0 });
 
-    return { 
-      statusCode: 200, 
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ totals, trend }) 
-    };
+    return res.status(200).json({ totals, trend });
   } catch (error) {
     console.error('Analytics Overview Error:', error);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Failed to fetch overview data' }) };
+    return res.status(500).json({ error: 'Failed to fetch overview data' });
   }
-};
+}
