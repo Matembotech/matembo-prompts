@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async'
 
 const SITE_NAME = 'Matembo Prompts'
-const SITE_URL = 'https://matembo-prompts.netlify.app'
+const SITE_URL = 'https://matembotech.site'
 const DEFAULT_TITLE = 'Matembo Prompts — where AI creators come to steal prompts'
 const DEFAULT_DESCRIPTION = 'Matembo Prompts — where AI creators come to steal prompts. Browse, copy and use professionally crafted AI prompts for image and video generation.'
 const DEFAULT_IMAGE = `${SITE_URL}/logo.webp`

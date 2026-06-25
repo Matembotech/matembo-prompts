@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SITE_URL = 'https://matembo-prompts.netlify.app';
+const SITE_URL = 'https://matembotech.site';
 
 function escapeXml(str) {
   return String(str)
