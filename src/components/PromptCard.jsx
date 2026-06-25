@@ -18,15 +18,6 @@ const IconVideo = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const IconUsers = ({ size = 14, color = '#9ca3af' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
 const IconBrokenImage = ({ size = 36, color = '#9ca3af' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -35,13 +26,6 @@ const IconBrokenImage = ({ size = 36, color = '#9ca3af' }) => (
     <line x1="3" y1="3" x2="21" y2="21" />
   </svg>
 );
-
-/* ── Format count ── */
-function formatCount(n) {
-  if (n >= 10000) return Math.floor(n / 1000) + 'k';
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return String(n);
-}
 
 /* ══════════════════════════════════════════════
    PROMPT CARD COMPONENT
@@ -166,13 +150,6 @@ function PromptCard({ id, slug, title, image_url, image_prompt, video_prompt, co
           )}
         </div>
 
-        {/* ── Counter ── */}
-        <div style={styles.counter}>
-          <IconUsers />
-          <span style={styles.counterText}>
-            {formatCount(localCount)} used this prompt
-          </span>
-        </div>
       </div>
   );
 }
@@ -223,6 +200,8 @@ const styles = {
     padding: '16px 20px',
     borderLeft: '0.5px solid #e5e7eb',
     borderRight: '0.5px solid #e5e7eb',
+    borderBottom: '0.5px solid #e5e7eb',
+    borderRadius: '0 0 16px 16px',
     background: '#ffffff',
   },
   cardTitle: {
@@ -272,25 +251,6 @@ const styles = {
     background: '#085048',
     color: '#ffffff',
     border: '1.5px solid #085048',
-  },
-
-  /* Counter */
-  counter: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '10px 20px 14px',
-    borderTop: '1px solid #f3f4f6',
-    borderLeft: '0.5px solid #e5e7eb',
-    borderRight: '0.5px solid #e5e7eb',
-    borderBottom: '0.5px solid #e5e7eb',
-    borderRadius: '0 0 16px 16px',
-    background: '#ffffff',
-  },
-  counterText: {
-    fontSize: '12px',
-    color: '#6b7280',
-    fontFamily: "'DM Sans', sans-serif",
   },
 };
 

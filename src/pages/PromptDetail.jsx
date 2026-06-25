@@ -20,15 +20,6 @@ const IconVideo = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const IconUsers = ({ size = 14, color = '#9ca3af' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
 const IconX = ({ size = 28, color = 'white' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="18" y1="6" x2="6" y2="18" />
@@ -51,12 +42,6 @@ const IconBrokenImage = ({ size = 48, color = '#9ca3af' }) => (
     <line x1="3" y1="3" x2="21" y2="21" />
   </svg>
 );
-
-function formatCount(n) {
-  if (n >= 10000) return Math.floor(n / 1000) + 'k';
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return String(n);
-}
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
@@ -150,7 +135,7 @@ function PromptDetail() {
           // Fetch Recommendations (randomize from recent 20)
           supabase
             .from('prompts')
-            .select('id, slug, title, image_url, image_prompt, video_prompt, copy_count')
+            .select('id, slug, title, image_url, image_prompt, video_prompt')
             .neq('id', data.id)
             .order('created_at', { ascending: false })
             .limit(20)
@@ -465,14 +450,6 @@ function PromptDetail() {
                 </div>
               </div>
             )}
-
-            {/* ── Counter ── */}
-            <div style={styles.counter}>
-              <IconUsers />
-              <span style={styles.counterText}>
-                {formatCount(localCount)} used this prompt
-              </span>
-            </div>
           </div>
         </div>
       </section>
@@ -490,7 +467,6 @@ function PromptDetail() {
                   </div>
                   <div style={styles.recBody}>
                     <h4 style={styles.recTitle}>{rec.title || 'AI Prompt'}</h4>
-                    <p style={styles.recViews}>{formatCount(rec.copy_count || 0)} used this</p>
                   </div>
                 </Link>
               ))}
@@ -736,19 +712,6 @@ const styles = {
     border: '1.5px solid #e5e7eb',
   },
 
-  /* Counter */
-  counter: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '16px 0',
-    borderTop: '1px solid #e5e7eb',
-  },
-  counterText: {
-    fontSize: '14px',
-    color: '#6b7280',
-  },
-
   /* States (error / not found) */
   stateCenter: {
     display: 'flex',
@@ -829,15 +792,10 @@ const styles = {
     fontSize: '16px',
     fontWeight: '700',
     color: '#0d0d0d',
-    margin: '0 0 8px 0',
+    margin: '0',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-  },
-  recViews: {
-    fontSize: '13px',
-    color: '#6b7280',
-    margin: '0',
   },
 
   /* Lightbox */
