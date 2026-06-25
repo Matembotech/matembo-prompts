@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import SEO from '../components/SEO'
+import SEO, { SITE_URL } from '../components/SEO'
 
 function Terms() {
   return (
@@ -9,7 +9,7 @@ function Terms() {
       <SEO
         title="Terms of Service"
         description="Terms of Service for Matembo Prompts — conditions governing the use of our AI prompt library and website."
-        url="https://matembo-prompts.netlify.app/terms"
+        url={`${SITE_URL}/terms`}
       />
 
       <section style={styles.heroSection}>

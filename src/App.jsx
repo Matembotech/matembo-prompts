@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import './App.css'
-import SEO from './components/SEO'
+import SEO, { SITE_URL } from './components/SEO'
 import HeroSection from './components/HeroSection'
 import PromptsGrid from './components/PromptsGrid'
 import AdminPanel from './components/AdminPanel'
@@ -14,9 +14,17 @@ import Footer from './components/Footer'
 import CookieConsent from './components/CookieConsent'
 
 function HomePage() {
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'Matembo Prompts',
+    url: `${SITE_URL}/`,
+    description: 'Browse, copy and use professionally crafted AI prompts for image and video generation.',
+  };
+
   return (
     <>
-      <SEO />
+      <SEO jsonLd={structuredData} />
       <HeroSection />
       <PromptsGrid />
     </>
@@ -59,4 +67,3 @@ function App() {
 }
 
 export default App
-

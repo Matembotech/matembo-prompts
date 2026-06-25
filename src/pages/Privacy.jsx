@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import SEO from '../components/SEO'
+import SEO, { SITE_URL } from '../components/SEO'
 
 function Privacy() {
   return (
@@ -9,7 +9,7 @@ function Privacy() {
       <SEO
         title="Privacy Policy"
         description="Privacy Policy for Matembo Prompts — learn how we handle your data, cookies, and third-party services."
-        url="https://matembo-prompts.netlify.app/privacy"
+        url={`${SITE_URL}/privacy`}
       />
 
       <section style={styles.heroSection}>

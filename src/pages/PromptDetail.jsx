@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
-import SEO from '../components/SEO';
+import SEO, { SITE_URL } from '../components/SEO';
 
 /* ── Inline SVG icons ── */
 const IconPhoto = ({ size = 16, color = 'currentColor' }) => (
@@ -56,6 +56,14 @@ function formatCount(n) {
   if (n >= 10000) return Math.floor(n / 1000) + 'k';
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
   return String(n);
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
+}
+
+function getPromptIdentifier(prompt, fallback) {
+  return prompt?.slug || prompt?.id || fallback;
 }
 
 /* ── Skeleton for loading ── */
@@ -113,10 +121,13 @@ function PromptDetail() {
     setNotFound(false);
     window.scrollTo(0, 0);
 
-    supabase
+    let query = supabase
       .from('prompts')
       .select('*')
-      .eq('slug', slug)
+
+    query = isUuid(slug) ? query.eq('id', slug) : query.eq('slug', slug);
+
+    query
       .single()
       .then(({ data, error: fetchError }) => {
         if (fetchError) {
@@ -248,7 +259,21 @@ function PromptDetail() {
         ? prompt.image_prompt.slice(0, 160)
         : undefined;
 
-  const SITE_URL = 'https://matembo-prompts.netlify.app';
+  const canonicalIdentifier = getPromptIdentifier(prompt, slug);
+  const canonicalUrl = `${SITE_URL}/prompts/${canonicalIdentifier}`;
+  const structuredData = prompt ? {
+    '@context': 'https://schema.org',
+    '@type': 'CreativeWork',
+    name: seoTitle,
+    description: seoDescription,
+    image: prompt.image_url,
+    url: canonicalUrl,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'Matembo Prompts',
+      url: SITE_URL,
+    },
+  } : null;
 
   /* ─── Loading skeleton ─── */
   if (loading) return <DetailSkeleton />;
@@ -257,7 +282,7 @@ function PromptDetail() {
   if (notFound) {
     return (
       <div style={styles.container}>
-        <SEO title="Prompt Not Found" />
+        <SEO title="Prompt Not Found" noindex />
         <div style={styles.heroSection}>
           <div style={styles.heroNav}>
             <Link to="/" style={styles.heroLogo}>
@@ -282,7 +307,7 @@ function PromptDetail() {
   if (error) {
     return (
       <div style={styles.container}>
-        <SEO title="Error" />
+        <SEO title="Error" noindex />
         <div style={styles.heroSection}>
           <div style={styles.heroNav}>
             <Link to="/" style={styles.heroLogo}>
@@ -341,8 +366,10 @@ function PromptDetail() {
       <SEO
         title={seoTitle}
         description={seoDescription}
-        url={`${SITE_URL}/prompts/${slug}`}
+        url={canonicalUrl}
         image={prompt?.image_url}
+        type="article"
+        jsonLd={structuredData}
       />
 
       {/* ── Hero / Header ── */}

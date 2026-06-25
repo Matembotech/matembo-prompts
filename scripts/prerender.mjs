@@ -6,12 +6,35 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, '..', 'dist');
+const sitemapPath = path.resolve(__dirname, '..', 'public', 'sitemap.xml');
 const port = 4173;
 
-const ROUTES = [
-  { route: '/', file: 'index.html' },
-  { route: '/about', file: 'about/index.html' },
-];
+function routeToFile(route) {
+  if (route === '/') return 'index.html';
+  return `${route.replace(/^\/+/, '').replace(/\/+$/, '')}/index.html`;
+}
+
+function readSitemapRoutes() {
+  if (!fs.existsSync(sitemapPath)) {
+    return ['/'];
+  }
+
+  const xml = fs.readFileSync(sitemapPath, 'utf8');
+  const matches = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)];
+  const routes = matches
+    .map((match) => {
+      const url = new URL(match[1]);
+      return url.pathname || '/';
+    })
+    .filter((route) => !route.startsWith('/admin'));
+
+  return [...new Set(routes)];
+}
+
+const ROUTES = readSitemapRoutes().map((route) => ({
+  route,
+  file: routeToFile(route),
+}));
 
 function findChrome() {
   const candidates = [
@@ -62,6 +85,42 @@ function startServer() {
   });
 }
 
+function shouldAbortRequest(req) {
+  const blockedHosts = [
+    'googletagmanager.com',
+    'googlesyndication.com',
+    'doubleclick.net',
+    'google-analytics.com',
+    'pagead2.googlesyndication.com',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com',
+  ];
+  const url = req.url();
+
+  return ['image', 'media', 'font'].includes(req.resourceType()) ||
+    blockedHosts.some((host) => url.includes(host));
+}
+
+async function waitForRouteContent(page, route) {
+  if (route === '/') {
+    await page.waitForSelector('a[href^="/prompts/"]', { timeout: 15000 });
+    return;
+  }
+
+  if (route.startsWith('/prompts/')) {
+    await page.waitForFunction(
+      () => document.body.innerText.includes('Image Prompt') ||
+        document.body.innerText.includes('Video Prompt') ||
+        document.body.innerText.includes('Prompt Not Found') ||
+        document.body.innerText.includes('Something went wrong'),
+      { timeout: 15000 },
+    );
+    return;
+  }
+
+  await page.waitForFunction(() => document.body.innerText.trim().length > 200, { timeout: 10000 });
+}
+
 async function prerender() {
   const chromePath = findChrome();
   if (!chromePath) {
@@ -81,12 +140,16 @@ async function prerender() {
   });
 
   try {
+    console.log(`  Prerendering ${ROUTES.length} sitemap route(s)`);
+    const failedRoutes = [];
+
     for (const { route, file } of ROUTES) {
       const page = await browser.newPage();
+      page.setDefaultNavigationTimeout(60000);
       await page.setRequestInterception(true);
 
       page.on('request', (req) => {
-        if (['image', 'media', 'font'].includes(req.resourceType())) {
+        if (shouldAbortRequest(req)) {
           req.abort();
         } else {
           req.continue();
@@ -94,20 +157,29 @@ async function prerender() {
       });
 
       console.log(`  Prerendering ${route} → ${file}`);
-      await page.goto(`http://localhost:${port}${route}`, {
-        waitUntil: 'networkidle0',
-        timeout: 30000,
-      });
+      try {
+        await page.goto(`http://localhost:${port}${route}`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000,
+        });
 
-      await page.waitForFunction(() => document.readyState === 'complete', { timeout: 5000 }).catch(() => {});
+        await waitForRouteContent(page, route);
 
-      const html = await page.content();
-      const outPath = path.join(distDir, file);
-      fs.mkdirSync(path.dirname(outPath), { recursive: true });
-      fs.writeFileSync(outPath, html);
-      console.log(`  ✓ Saved ${outPath}`);
+        const html = await page.content();
+        const outPath = path.join(distDir, file);
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, html);
+        console.log(`  ✓ Saved ${outPath}`);
+      } catch (err) {
+        failedRoutes.push({ route, message: err.message });
+        console.error(`  ✗ Failed ${route}: ${err.message}`);
+      }
 
       await page.close();
+    }
+
+    if (failedRoutes.length > 0) {
+      throw new Error(`Failed to prerender ${failedRoutes.length} route(s): ${failedRoutes.map((item) => item.route).join(', ')}`);
     }
   } finally {
     await browser.close();

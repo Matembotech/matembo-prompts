@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://matembotech.site/sitemap.xml
+Sitemap: https://www.matembotech.site/sitemap.xml

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SITE_URL = 'https://matembotech.site';
+const SITE_URL = 'https://www.matembotech.site';
 
 function escapeXml(str) {
   return String(str)
@@ -21,6 +21,11 @@ function formatDate(dateStr) {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
   return d.toISOString();
+}
+
+function getPromptPath(prompt) {
+  const identifier = prompt.slug || prompt.id;
+  return `/prompts/${encodeURIComponent(identifier)}`;
 }
 
 function renderSitemap(prompts) {
@@ -54,7 +59,7 @@ function renderSitemap(prompts) {
     const lastmod = formatDate(p.created_at);
     const lastmodLine = lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : '';
     urls.push(`  <url>
-    <loc>${escapeXml(`${SITE_URL}/prompts/${p.id}`)}</loc>
+    <loc>${escapeXml(`${SITE_URL}${getPromptPath(p)}`)}</loc>
 ${lastmodLine}    <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>`);
@@ -86,7 +91,7 @@ async function generate() {
   while (true) {
     const { data, error } = await supabase
       .from('prompts')
-      .select('id, created_at')
+      .select('id, slug, created_at')
       .order('created_at', { ascending: false })
       .range(from, from + limit - 1);
 
@@ -98,12 +103,15 @@ async function generate() {
   }
 
   console.log(`  Found ${allPrompts.length} prompts`);
+  const sluggedCount = allPrompts.filter((prompt) => prompt.slug).length;
+  const idFallbackCount = allPrompts.length - sluggedCount;
 
   const xml = renderSitemap(allPrompts);
   const outPath = path.resolve(__dirname, '..', 'public', 'sitemap.xml');
   fs.writeFileSync(outPath, xml);
 
   console.log(`  ✓ Sitemap written to public/sitemap.xml (${(xml.length / 1024).toFixed(1)} KB)`);
+  console.log(`  Sitemap stats: ${allPrompts.length + 4} total URLs, ${allPrompts.length} prompt URLs, ${sluggedCount} slug URLs, ${idFallbackCount} ID fallback URLs`);
 }
 
 generate().catch((err) => {
