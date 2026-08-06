@@ -28,7 +28,7 @@ function getPromptPath(prompt) {
   return `/prompts/${encodeURIComponent(identifier)}`;
 }
 
-function renderSitemap(prompts) {
+function renderSitemap(prompts, categories) {
   const urls = [];
 
   urls.push(`  <url>
@@ -44,6 +44,12 @@ function renderSitemap(prompts) {
   </url>`);
 
   urls.push(`  <url>
+    <loc>${SITE_URL}/contact</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>`);
+
+  urls.push(`  <url>
     <loc>${SITE_URL}/privacy</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
@@ -54,6 +60,17 @@ function renderSitemap(prompts) {
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>`);
+
+  for (const c of categories || []) {
+    const slug = c.slug || c.id;
+    const lastmod = formatDate(c.created_at);
+    const lastmodLine = lastmod ? `    <lastmod>${lastmod}</lastmod>\n` : '';
+    urls.push(`  <url>
+    <loc>${SITE_URL}/category/${encodeURIComponent(slug)}</loc>
+${lastmodLine}    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`);
+  }
 
   for (const p of prompts) {
     const lastmod = formatDate(p.created_at);
@@ -106,12 +123,18 @@ async function generate() {
   const sluggedCount = allPrompts.filter((prompt) => prompt.slug).length;
   const idFallbackCount = allPrompts.length - sluggedCount;
 
-  const xml = renderSitemap(allPrompts);
+  console.log('  Fetching categories from Supabase...');
+  const { data: categories, error: catError } = await supabase
+    .from('categories')
+    .select('id, slug, created_at');
+  if (catError) throw new Error(`Categories query failed: ${catError.message}`);
+
+  const xml = renderSitemap(allPrompts, categories || []);
   const outPath = path.resolve(__dirname, '..', 'public', 'sitemap.xml');
   fs.writeFileSync(outPath, xml);
 
   console.log(`  ✓ Sitemap written to public/sitemap.xml (${(xml.length / 1024).toFixed(1)} KB)`);
-  console.log(`  Sitemap stats: ${allPrompts.length + 4} total URLs, ${allPrompts.length} prompt URLs, ${sluggedCount} slug URLs, ${idFallbackCount} ID fallback URLs`);
+  console.log(`  Sitemap stats: ${allPrompts.length + categories.length + 5} total URLs, ${allPrompts.length} prompt URLs, ${categories.length} category URLs, ${sluggedCount} slug URLs, ${idFallbackCount} ID fallback URLs`);
 }
 
 generate().catch((err) => {
