@@ -29,7 +29,13 @@ function Privacy() {
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>1. Information We Collect</h2>
             <p style={styles.text}>
-              Matembo Prompts does not require user accounts, logins, or personal information. We do not collect names, email addresses, or any personally identifiable information directly.
+              Browsing Matembo Prompts does not require an account. We do not collect names, email addresses, or personal information from visitors who simply browse, copy, or view prompts.
+            </p>
+            <p style={styles.text}>
+              <strong>Optional accounts.</strong> You may choose to sign in (using an email/password or Google). If you do, we store the profile information you provide {'— '}such as your name and email address{' —'} in our database (Supabase) to power account features.
+            </p>
+            <p style={styles.text}>
+              <strong>Device-local interaction data.</strong> Likes and bookmarks are saved to your browser's local storage so the site works even if you are not signed in. When you sign in, those interactions are synced to your account so they follow you across devices.
             </p>
             <p style={styles.text}>
               We use <strong>Google Analytics 4 (GA4)</strong> to understand how visitors interact with our site. Google Analytics collects anonymized data including pages visited, time spent on site, browser type, device type, and approximate geographic location. This data is aggregated and cannot be used to identify individual users.
@@ -39,7 +45,7 @@ function Privacy() {
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>2. Cookies and Advertising</h2>
             <p style={styles.text}>
-              We use cookies to personalize content and ads, to provide social media features, and to analyze our traffic. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to our website or other websites.
+              We use cookies to personalize content and ads, to provide social media features, and to analyze our traffic. Our own account features store a secure session token so you can stay signed in. Third-party vendors, including Google, use cookies to serve ads based on a user's prior visits to our website or other websites.
             </p>
             <p style={styles.text}>
               Google's use of advertising cookies enables it and its partners to serve ads to our users based on their visit to our sites and/or other sites on the Internet.
@@ -76,21 +82,21 @@ function Privacy() {
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>4. How We Use Information</h2>
             <p style={styles.text}>
-              The anonymized analytics data helps us understand which prompts are most popular, how users navigate the site, and how to improve the browsing experience. We do not sell, rent, or share any data with third parties beyond the services listed above.
+              The anonymized analytics data helps us understand which prompts are most popular, how users navigate the site, and how to improve the browsing experience. If you create an account, your profile is used to store and sync your likes and bookmarks so they display across your devices. We do not sell, rent, or share any data with third parties beyond the services listed above.
             </p>
           </div>
 
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>5. Data Retention</h2>
             <p style={styles.text}>
-              Google Analytics data is retained according to Google's default retention period (26 months for user-level data). We do not maintain separate copies of analytics data.
+              Google Analytics data is retained according to Google's default retention period (26 months for user-level data). Account profiles are kept only while your account is active; you may delete your bookmarks and interaction data from your device's browser storage at any time by clearing your browser storage.
             </p>
           </div>
 
           <div style={styles.section}>
             <h2 style={styles.sectionTitle}>6. Your Rights</h2>
             <p style={styles.text}>
-              Since we do not collect personal data directly, there is no personal data to access, correct, or delete. You can block Google Analytics tracking by using browser extensions, disabling cookies, or enabling your browser's &quot;Do Not Track&quot; setting.
+              Browsing visitors do not provide personal data directly, so there is no personal data to access, correct, or delete for anonymous use. If you created an account and would like to have it and its associated data removed, contact us and we will delete it. You can block Google Analytics tracking and clear local likes/bookmarks by using browser extensions, disabling cookies, or clearing your browser's site data.
             </p>
           </div>
 

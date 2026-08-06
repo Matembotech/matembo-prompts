@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import SearchBar from './SearchBar';
+import { useAuth } from '../context/AuthContext';
 
 const navLinks = [];
 
@@ -14,6 +16,7 @@ const tags = [
 function HeroSection() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isAuthenticated, isAdmin, user, profile, signOut } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
@@ -40,7 +43,7 @@ function HeroSection() {
             <img
               src="/logo.webp"
               alt="Matembo Prompts Logo"
-              fetchpriority="high"
+              fetchPriority="high"
               loading="eager"
               className="w-9 h-9 rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
             />
@@ -86,6 +89,36 @@ function HeroSection() {
               See The Story Behind
               <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
             </Link>
+
+            {isAuthenticated ? (
+              <div className="hidden md:flex items-center gap-2">
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="text-[14px] font-[600] text-[#0a6b5e] hover:text-[#085048] transition-colors font-[var(--font-body)]"
+                  >
+                    Admin
+                  </Link>
+                )}
+                <span className="text-[14px] font-[600] text-text-muted font-[var(--font-body)]">
+                  {profile?.full_name || user?.email?.split('@')[0] || 'Account'}
+                </span>
+                <button
+                  onClick={() => signOut()}
+                  className="text-[14px] font-[600] text-text-muted hover:text-[#dc2626] transition-colors bg-transparent border-none cursor-pointer font-[var(--font-body)]"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/signin"
+                id="nav-signin"
+                className="hidden md:flex items-center gap-2 text-[15px] font-[600] text-text-muted hover:text-[#085048] transition-colors duration-200 font-[var(--font-body)]"
+              >
+                Sign In
+              </Link>
+            )}
 
             <a
               href="#prompts-grid-section"
@@ -157,6 +190,38 @@ function HeroSection() {
             >
               Prompts
             </a>
+            {isAuthenticated ? (
+              <>
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="mt-2 flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-[#0a6b5e]/10 text-[#085048] text-[14px] font-bold font-[var(--font-body)]"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    Admin Dashboard
+                  </Link>
+                )}
+                <button
+                  onClick={() => { setMobileMenuOpen(false); signOut(); }}
+                  className="mt-2 flex items-center justify-center gap-2 w-full px-5 py-3 rounded-full border-2 border-[#0a6b5e] text-[#0a6b5e] text-[14px] font-bold font-[var(--font-body)] bg-transparent"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/signin"
+                className="
+                  mt-2 flex items-center justify-center gap-2
+                  px-5 py-3 rounded-full
+                  bg-[#0a6b5e] text-white
+                  text-[14px] font-bold font-[var(--font-body)]
+                "
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
       </nav>
@@ -215,7 +280,7 @@ function HeroSection() {
                   max-w-[420px] mb-8
                 "
               >
-                Matembo Prompts — where AI creators come to steal prompts.
+                Matembo Prompts — East Africa's #1 AI Image Prompt Library.
               </p>
 
               {/* CTA Buttons */}
@@ -256,6 +321,11 @@ function HeroSection() {
                 >
                   Read The Story
                 </Link>
+              </div>
+
+              {/* Global search */}
+              <div className="mb-8 w-full sm:max-w-[440px]">
+                <SearchBar />
               </div>
 
               {/* Tags */}

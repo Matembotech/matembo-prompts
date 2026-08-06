@@ -4,11 +4,15 @@ import './App.css'
 import SEO, { SITE_URL } from './components/SEO'
 import HeroSection from './components/HeroSection'
 import PromptsGrid from './components/PromptsGrid'
+import BrowseByStyle from './components/BrowseByStyle'
 import AdminPanel from './components/AdminPanel'
 import About from './pages/About'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
+import Contact from './pages/Contact'
 import PromptDetail from './pages/PromptDetail'
+import SignIn from './pages/SignIn'
+import CategoryPage from './pages/CategoryPage'
 import NotFound from './pages/NotFound'
 import Footer from './components/Footer'
 import CookieConsent from './components/CookieConsent'
@@ -19,7 +23,7 @@ function HomePage() {
     '@type': 'WebSite',
     name: 'Matembo Prompts',
     url: `${SITE_URL}/`,
-    description: 'Browse, copy and use professionally crafted AI prompts for image and video generation.',
+    description: "East Africa's #1 AI Image Prompt Library — discover, copy, and create stunning AI images with professionally crafted prompts for AI creators.",
   };
 
   return (
@@ -27,6 +31,7 @@ function HomePage() {
       <SEO jsonLd={structuredData} />
       <HeroSection />
       <PromptsGrid />
+      <BrowseByStyle />
     </>
   )
 }
@@ -49,7 +54,10 @@ function AppContent() {
         <Route path="/about" element={<About />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/prompts/:slug" element={<PromptDetail />} />
+        <Route path="/category/:slug" element={<CategoryPage />} />
+        <Route path="/signin" element={<SignIn />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       {!isAdmin && <Footer />}

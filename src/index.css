@@ -16,6 +16,7 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    overflow-x: clip;
   }
   body {
     font-family: var(--font-body);
@@ -23,6 +24,20 @@
     color: var(--color-text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: clip;
+    overflow-wrap: break-word;
+  }
+  img, svg {
+    max-width: 100%;
+  }
+  /* Prevent iOS auto-zoom when tapping form fields. */
+  input, select, textarea {
+    font-size: 16px;
+  }
+  @media (min-width: 768px) {
+    input, select, textarea {
+      font-size: inherit;
+    }
   }
 }
 

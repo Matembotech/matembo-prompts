@@ -1,28 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { usePrompts } from '../hooks/usePrompts';
 import PromptCard from './PromptCard';
+import { IconWifiOff, IconGrid } from './icons';
 
-/* ── Inline SVG icons ── */
-const IconWifiOff = ({ size = 40, color = '#9ca3af' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="1" y1="1" x2="23" y2="23" />
-    <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
-    <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
-    <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
-    <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
-    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-    <line x1="12" y1="20" x2="12.01" y2="20" />
-  </svg>
-);
-
-const IconGrid = ({ size = 48, color = '#d1d5db' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="7" height="7" />
-    <rect x="14" y="3" width="7" height="7" />
-    <rect x="14" y="14" width="7" height="7" />
-    <rect x="3" y="14" width="7" height="7" />
-  </svg>
-);
+// Curated homepage filters. "subject" pills map to the subjects table,
+// "category" pills map to a category slug (e.g. business-posters).
+const HOME_FILTERS = [
+  { label: 'All' },
+  { label: 'Men', kind: 'subject', slug: 'men' },
+  { label: 'Women', kind: 'subject', slug: 'women' },
+  { label: 'Posters', kind: 'category', slug: 'business-posters' },
+];
 
 /* ══════════════════════════════════════════════
    SKELETON CARD
@@ -30,13 +19,16 @@ const IconGrid = ({ size = 48, color = '#d1d5db' }) => (
 function SkeletonCard() {
   return (
     <div style={styles.skeletonCard}>
-      <div style={{ ...styles.shimmer, height: '280px', borderRadius: '16px 16px 0 0' }} />
+      <div style={{ ...styles.shimmer, aspectRatio: '4 / 3', borderRadius: '16px 16px 0 0' }} />
       <div style={styles.skeletonBody}>
+        <div style={{ ...styles.shimmer, height: '14px', borderRadius: '8px', width: '40%', marginBottom: '10px' }} />
+        <div style={{ ...styles.shimmer, height: '18px', borderRadius: '8px', width: '80%', marginBottom: '12px' }} />
+        <div style={{ ...styles.shimmer, height: '14px', borderRadius: '8px', width: '100%', marginBottom: '6px' }} />
+        <div style={{ ...styles.shimmer, height: '14px', borderRadius: '8px', width: '60%', marginBottom: '14px' }} />
         <div style={styles.skeletonBtnRow}>
           <div style={{ ...styles.shimmer, height: '36px', borderRadius: '999px', flex: 1 }} />
           <div style={{ ...styles.shimmer, height: '36px', borderRadius: '999px', flex: 1 }} />
         </div>
-        <div style={{ ...styles.shimmer, height: '14px', borderRadius: '8px', width: '50%', marginTop: '12px' }} />
       </div>
     </div>
   );
@@ -45,80 +37,40 @@ function SkeletonCard() {
 /* ══════════════════════════════════════════════
    PROMPTS GRID COMPONENT
    ══════════════════════════════════════════════ */
-function PromptsGrid() {
-  const [prompts, setPrompts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
+function PromptsGrid({ categorySlug = null }) {
+  const {
+    prompts,
+    loading,
+    error,
+    page,
+    totalCount,
+    totalPages,
+    activeCategorySlug,
+    activeSubjectSlug,
+    selectCategory,
+    selectSubject,
+    goToPage,
+  } = usePrompts({ pageSize: 10 });
 
-  const PER_PAGE = 10;
-  const totalPages = Math.ceil(totalCount / PER_PAGE);
-  const needsPagination = totalCount > PER_PAGE;
-
-  /* ─── Fetch prompts ─── */
-  const fetchPrompts = async (page = 1) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { count, error: countError } = await supabase
-        .from('prompts')
-        .select('*', { count: 'exact', head: true });
-
-      if (countError) throw countError;
-      setTotalCount(count);
-
-      if (count <= PER_PAGE) {
-        const { data, error: fetchError } = await supabase
-          .from('prompts')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (fetchError) throw fetchError;
-        setPrompts(data || []);
-        setCurrentPage(1);
-      } else {
-        const from = (page - 1) * PER_PAGE;
-        const to = from + PER_PAGE - 1;
-
-        const { data, error: fetchError } = await supabase
-          .from('prompts')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .range(from, to);
-
-        if (fetchError) throw fetchError;
-        setPrompts(data || []);
-      }
-    } catch (err) {
-      console.error('Error fetching prompts:', err);
-      setError(err.message || 'Failed to load prompts');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /* ─── Pagination handler ─── */
-  const goToPage = (page) => {
-    setCurrentPage(page);
-    fetchPrompts(page);
-    const el = document.getElementById('prompts-grid-section');
-    if (el) window.scrollTo({ top: el.offsetTop - 100, behavior: 'smooth' });
-  };
-
+  // Apply an externally requested category filter (e.g. from Browse by Style).
   useEffect(() => {
-    fetchPrompts();
+    if (!categorySlug) return;
+    selectCategory(categorySlug);
+  }, [categorySlug, selectCategory]);
 
-    if (needsPagination) return;
+  const needsPagination = totalCount > 10;
+
+  /* ─── Realtime: only on the unfiltered first page ─── */
+  useEffect(() => {
+    if (needsPagination || activeCategorySlug || activeSubjectSlug || page !== 1) return;
 
     const channel = supabase
       .channel('prompts-realtime')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'prompts' },
-        (payload) => {
-          setPrompts((prev) => [payload.new, ...prev]);
-          setTotalCount((prev) => prev + 1);
+        () => {
+          window.location.reload();
         }
       )
       .subscribe();
@@ -126,29 +78,26 @@ function PromptsGrid() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [needsPagination, activeCategorySlug, activeSubjectSlug, page]);
 
-  /* ─── Build page numbers ─── */
+  const goToPageAndScroll = (next) => {
+    goToPage(next);
+    const el = document.getElementById('prompts-grid-section');
+    if (el) window.scrollTo({ top: el.offsetTop - 100, behavior: 'smooth' });
+  };
+
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let start = Math.max(1, page - Math.floor(maxVisible / 2));
     let end = Math.min(totalPages, start + maxVisible - 1);
-
-    if (end - start + 1 < maxVisible) {
-      start = Math.max(1, end - maxVisible + 1);
-    }
-
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
+    if (end - start + 1 < maxVisible) start = Math.max(1, end - maxVisible + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
     return pages;
   };
 
-  /* ═══ RENDER ═══ */
   return (
     <>
-      {/* Inject keyframes + responsive grid CSS */}
       <style>{componentCSS}</style>
 
       <section id="prompts-grid-section" style={styles.section}>
@@ -161,6 +110,33 @@ function PromptsGrid() {
           </p>
           <div style={styles.headerDivider} />
         </div>
+
+        {/* ── Filters: Men / Women / Posters ── */}
+        {!loading && (
+          <div style={styles.filterRow} role="group" aria-label="Filter prompts">
+            {HOME_FILTERS.map((f) => {
+              const catSlug = String(activeCategorySlug || '').toLowerCase();
+              const subSlug = String(activeSubjectSlug || '').toLowerCase();
+              const active = !f.kind
+                ? !activeCategorySlug && !activeSubjectSlug
+                : f.kind === 'subject'
+                  ? !activeCategorySlug && subSlug === f.slug
+                  : !activeSubjectSlug && catSlug === f.slug;
+              return (
+                <FilterPill
+                  key={f.label}
+                  label={f.label}
+                  active={active}
+                  onClick={() => {
+                    if (!f.kind) { selectCategory(null); selectSubject(null); return; }
+                    if (f.kind === 'subject') { selectCategory(null); selectSubject(f.slug); return; }
+                    selectSubject(null); selectCategory(f.slug);
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
 
         {/* ── Loading: skeleton grid ── */}
         {loading && (
@@ -176,7 +152,7 @@ function PromptsGrid() {
           <div style={styles.stateCenter}>
             <IconWifiOff />
             <p style={styles.stateTitle}>Failed to load prompts. Please refresh.</p>
-            <button onClick={fetchPrompts} className="interactive-btn" style={styles.retryBtn}>
+            <button onClick={() => selectCategory(activeCategorySlug)} className="interactive-btn" style={styles.retryBtn}>
               Try Again
             </button>
           </div>
@@ -186,8 +162,10 @@ function PromptsGrid() {
         {!loading && !error && prompts.length === 0 && (
           <div style={styles.stateCenter}>
             <IconGrid />
-            <p style={styles.stateTitle}>No prompts yet. Check back soon!</p>
-            <p style={styles.stateSubtitle}>Prompts will appear here once added.</p>
+            <p style={styles.stateTitle}>No prompts here yet.</p>
+            <p style={styles.stateSubtitle}>
+              {(activeCategorySlug || activeSubjectSlug) ? 'Try another filter or check back soon.' : 'Prompts will appear here once added.'}
+            </p>
           </div>
         )}
 
@@ -195,67 +173,63 @@ function PromptsGrid() {
         {!loading && !error && prompts.length > 0 && (
           <div className="prompts-grid">
             {prompts.map((prompt) => (
-              <PromptCard
-                key={prompt.id}
-                id={prompt.id}
-                slug={prompt.slug}
-                title={prompt.title}
-                image_url={prompt.image_url}
-                image_prompt={prompt.image_prompt}
-                video_prompt={prompt.video_prompt}
-                copy_count={prompt.copy_count}
-              />
+              <PromptCard key={prompt.id} prompt={prompt} />
             ))}
           </div>
         )}
 
         {/* ── Pagination ── */}
         {!loading && !error && needsPagination && prompts.length > 0 && (
-          <div style={styles.pagination}>
-            <button
-              onClick={() => goToPage(currentPage - 1)}
-              disabled={currentPage === 1}
-              style={{
-                ...styles.pageBtn,
-                ...(currentPage === 1 ? styles.pageBtnDisabled : {}),
-              }}
-            >
-              ← Previous
-            </button>
-
-            {getPageNumbers().map((page) => (
+          <>
+            <div style={styles.pagination}>
               <button
-                key={page}
-                onClick={() => goToPage(page)}
-                style={{
-                  ...styles.pageBtn,
-                  ...(page === currentPage ? styles.pageBtnActive : {}),
-                }}
+                onClick={() => goToPageAndScroll(page - 1)}
+                disabled={page === 1}
+                style={{ ...styles.pageBtn, ...(page === 1 ? styles.pageBtnDisabled : {}) }}
               >
-                {page}
+                ← Previous
               </button>
-            ))}
 
-            <button
-              onClick={() => goToPage(currentPage + 1)}
-              disabled={currentPage >= totalPages}
-              style={{
-                ...styles.pageBtn,
-                ...(currentPage >= totalPages ? styles.pageBtnDisabled : {}),
-              }}
-            >
-              Next →
-            </button>
-          </div>
-        )}
+              {getPageNumbers().map((p) => (
+                <button
+                  key={p}
+                  onClick={() => goToPageAndScroll(p)}
+                  style={{ ...styles.pageBtn, ...(p === page ? styles.pageBtnActive : {}) }}
+                >
+                  {p}
+                </button>
+              ))}
 
-        {!loading && !error && needsPagination && prompts.length > 0 && (
-          <p style={styles.pageInfo}>
-            Page {currentPage} of {totalPages} ({totalCount} prompts)
-          </p>
+              <button
+                onClick={() => goToPageAndScroll(page + 1)}
+                disabled={page >= totalPages}
+                style={{ ...styles.pageBtn, ...(page >= totalPages ? styles.pageBtnDisabled : {}) }}
+              >
+                Next →
+              </button>
+            </div>
+            <p style={styles.pageInfo}>
+              Page {page} of {totalPages} ({totalCount} prompts)
+            </p>
+          </>
         )}
       </section>
     </>
+  );
+}
+
+function FilterPill({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      style={{
+        ...styles.filterPill,
+        ...(active ? styles.filterPillActive : {}),
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -287,7 +261,7 @@ const componentCSS = `
 
 @media (max-width: 600px) {
   .prompts-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(1, 1fr);
   }
 }
 `;
@@ -345,6 +319,34 @@ const styles = {
     borderRadius: '999px',
   },
 
+  /* Category filter */
+  filterRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: '10px',
+    margin: '0 auto 40px',
+    maxWidth: '1340px',
+    padding: '0 20px',
+  },
+  filterPill: {
+    padding: '8px 18px',
+    borderRadius: '999px',
+    border: '1.5px solid #e5e7eb',
+    background: '#ffffff',
+    color: '#374151',
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  filterPillActive: {
+    background: '#0a6b5e',
+    color: '#ffffff',
+    borderColor: '#0a6b5e',
+  },
+
   /* Skeleton */
   skeletonCard: {
     borderRadius: '16px',
@@ -363,6 +365,7 @@ const styles = {
   skeletonBtnRow: {
     display: 'flex',
     gap: '10px',
+    marginTop: '16px',
   },
 
   /* Center states (error / empty) */

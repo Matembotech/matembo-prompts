@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { supabase } from '../supabaseClient';
 import SEO, { SITE_URL } from '../components/SEO';
+import { fetchPromptByIdentifier, fetchRecommendations, incrementView, incrementCopy } from '../lib/prompts';
+import { canonicalPromptUrl } from '../lib/share';
+import { isNewPrompt, isTrendingPrompt } from '../lib/badges';
+import { timeAgo } from '../lib/format';
+import CategoryBadge from '../components/CategoryBadge';
+import PromptCard from '../components/PromptCard';
+import { resolveAuthorName } from '../lib/authors';
+import { DEFAULT_AUTHOR } from '../lib/config';
+import LikeButton from '../components/LikeButton';
+import BookmarkButton from '../components/BookmarkButton';
+import ShareButton from '../components/ShareButton';
+import { NewBadge, TrendingBadge } from '../components/Badges';
 
 /* ── Inline SVG icons ── */
 const IconPhoto = ({ size = 16, color = 'currentColor' }) => (
@@ -42,10 +53,6 @@ const IconBrokenImage = ({ size = 48, color = '#9ca3af' }) => (
     <line x1="3" y1="3" x2="21" y2="21" />
   </svg>
 );
-
-function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || '');
-}
 
 function getPromptIdentifier(prompt, fallback) {
   return prompt?.slug || prompt?.id || fallback;
@@ -92,64 +99,52 @@ function PromptDetail() {
   const [copiedImage, setCopiedImage] = useState(false);
   const [copiedVideo, setCopiedVideo] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [localCount, setLocalCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [closing, setClosing] = useState(false);
 
   const hasImagePrompt = prompt?.image_prompt && prompt.image_prompt.trim().length > 0;
   const hasVideoPrompt = prompt?.video_prompt && prompt.video_prompt.trim().length > 0;
+  const showNew = isNewPrompt(prompt?.created_at);
+  const showTrending = isTrendingPrompt(prompt?.trending_until);
 
   /* ─── Fetch prompt ─── */
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setNotFound(false);
     window.scrollTo(0, 0);
 
-    let query = supabase
-      .from('prompts')
-      .select('*')
+    fetchPromptByIdentifier(slug)
+      .then((data) => {
+        if (cancelled) return;
+        setPrompt(data);
 
-    query = isUuid(slug) ? query.eq('id', slug) : query.eq('slug', slug);
+        // Increment view count in background (safe RPC).
+        incrementView(data.id);
 
-    query
-      .single()
-      .then(({ data, error: fetchError }) => {
-        if (fetchError) {
-          if (fetchError.code === 'PGRST116') {
-            setNotFound(true);
-          } else {
-            setError(fetchError.message || 'Failed to load prompt');
-          }
+        // Fetch Recommendations (randomize from recent 20)
+        fetchRecommendations(data.id, 3)
+          .then((recs) => {
+            if (!cancelled) setRecommendations(recs);
+          })
+          .catch(() => {});
+      })
+      .catch((fetchError) => {
+        if (cancelled) return;
+        if (fetchError?.code === 'PGRST116') {
+          setNotFound(true);
         } else {
-          setPrompt(data);
-          setLocalCount(data.copy_count || 0);
-          
-          // Increment view count in background
-          supabase
-            .from('prompts')
-            .update({ view_count: (data.view_count || 0) + 1 })
-            .eq('id', data.id)
-            .then(() => {});
-
-          // Fetch Recommendations (randomize from recent 20)
-          supabase
-            .from('prompts')
-            .select('id, slug, title, image_url, image_prompt, video_prompt')
-            .neq('id', data.id)
-            .order('created_at', { ascending: false })
-            .limit(20)
-            .then(({ data: recData }) => {
-              if (recData && recData.length > 0) {
-                // Shuffle array to show different prompts each time
-                const shuffled = [...recData].sort(() => 0.5 - Math.random());
-                setRecommendations(shuffled.slice(0, 3));
-              }
-            });
+          setError(fetchError.message || 'Failed to load prompt');
         }
       })
-      .catch((err) => setError(err.message || 'Failed to load prompt'))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   /* ─── Lightbox handlers ─── */
@@ -183,25 +178,12 @@ function PromptDetail() {
     };
   }, [lightboxOpen]);
 
-  /* ─── Increment counter (optimistic + Supabase) ─── */
-  const incrementCount = () => {
-    const newCount = localCount + 1;
-    setLocalCount(newCount);
-    supabase
-      .from('prompts')
-      .update({ copy_count: newCount })
-      .eq('id', prompt?.id)
-      .then(({ error: updateError }) => {
-        if (updateError) console.error('Failed to update copy_count:', updateError);
-      });
-  };
-
   /* ─── Copy handlers ─── */
   const handleCopyImage = async () => {
     try {
       await navigator.clipboard.writeText(prompt.image_prompt);
       setCopiedImage(true);
-      incrementCount();
+      incrementCopy(prompt?.id);
       setTimeout(() => setCopiedImage(false), 2000);
     } catch (err) {
       console.error('Copy failed:', err);
@@ -212,7 +194,7 @@ function PromptDetail() {
     try {
       await navigator.clipboard.writeText(prompt.video_prompt);
       setCopiedVideo(true);
-      incrementCount();
+      incrementCopy(prompt?.id);
       setTimeout(() => setCopiedVideo(false), 2000);
     } catch (err) {
       console.error('Copy failed:', err);
@@ -399,8 +381,36 @@ function PromptDetail() {
             
             {/* Title & Description */}
             <div style={styles.metaBlock}>
+              {(showNew || showTrending) && (
+                <div style={styles.topBadgeRow}>
+                  {showNew && <NewBadge />}
+                  {showTrending && <TrendingBadge />}
+                </div>
+              )}
+              {prompt?.category && (
+                <div style={{ marginBottom: '10px' }}>
+                  <CategoryBadge category={prompt.category} />
+                </div>
+              )}
               <h1 style={styles.detailTitle}>{prompt.title || 'AI Prompt'}</h1>
               {prompt.description && <p style={styles.detailDesc}>{prompt.description}</p>}
+
+              {/* Date */}
+              <div style={styles.detailMetaRow}>
+                {prompt?.created_at && <span style={styles.detailDate}>{timeAgo(prompt.created_at)}</span>}
+              </div>
+
+              {/* Social actions */}
+              <div style={styles.detailSocialRow}>
+                <LikeButton promptId={prompt.id} count={prompt.like_count} size={30} />
+                <BookmarkButton promptId={prompt.id} size={28} />
+                <ShareButton
+                  promptId={prompt.id}
+                  url={canonicalPromptUrl(prompt.slug || prompt.id, prompt.id)}
+                  title={prompt.title}
+                  text={prompt.excerpt || prompt.image_prompt || prompt.video_prompt}
+                />
+              </div>
             </div>
 
             {hasImagePrompt && (
@@ -450,6 +460,11 @@ function PromptDetail() {
                 </div>
               </div>
             )}
+
+            {/* Author at the end */}
+            <div style={styles.authorFooter}>
+              by {resolveAuthorName(prompt.author, DEFAULT_AUTHOR)}
+            </div>
           </div>
         </div>
       </section>
@@ -461,14 +476,7 @@ function PromptDetail() {
             <h3 style={styles.recHeading}>You May Also Like</h3>
             <div className="detail-rec-grid">
               {recommendations.map(rec => (
-                <Link to={`/prompts/${rec.slug || rec.id}`} key={rec.id} style={styles.recCard}>
-                  <div style={styles.recImageWrapper}>
-                    <img src={rec.image_url} alt={rec.title || 'Recommended Prompt'} style={styles.recImage} loading="lazy" />
-                  </div>
-                  <div style={styles.recBody}>
-                    <h4 style={styles.recTitle}>{rec.title || 'AI Prompt'}</h4>
-                  </div>
-                </Link>
+                <PromptCard key={rec.id} prompt={rec} />
               ))}
             </div>
           </div>
@@ -543,6 +551,8 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '10px',
     marginBottom: '60px',
     width: '100%',
     maxWidth: '1400px',
@@ -621,6 +631,46 @@ const styles = {
   metaBlock: {
     marginBottom: '8px',
   },
+  topBadgeRow: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '12px',
+  },
+  detailMetaRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    marginTop: '18px',
+  },
+  detailDate: {
+    fontSize: '13px',
+    color: '#9ca3af',
+    fontWeight: 500,
+    fontFamily: "'DM Sans', sans-serif",
+    whiteSpace: 'nowrap',
+  },
+  authorFooter: {
+    marginTop: '24px',
+    paddingTop: '12px',
+    borderTop: '1px solid #f3f4f6',
+    fontSize: '13px',
+    color: '#9ca3af',
+    fontWeight: 500,
+    fontFamily: "'DM Sans', sans-serif",
+    textTransform: 'lowercase',
+  },
+  detailSocialRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginTop: '16px',
+    padding: '10px 14px',
+    background: '#f9fafb',
+    border: '1px solid #f3f4f6',
+    borderRadius: '999px',
+    width: 'fit-content',
+  },
   detailTitle: {
     fontFamily: "'Syne', sans-serif",
     fontSize: '32px',
@@ -628,6 +678,7 @@ const styles = {
     color: '#0d0d0d',
     margin: '0 0 12px 0',
     lineHeight: '1.2',
+    overflowWrap: 'break-word',
   },
   detailDesc: {
     fontSize: '16px',
@@ -763,39 +814,6 @@ const styles = {
     fontWeight: '800',
     color: '#0d0d0d',
     marginBottom: '32px',
-  },
-  recCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    background: '#ffffff',
-    borderRadius: '16px',
-    overflow: 'hidden',
-    textDecoration: 'none',
-    border: '1px solid #e5e7eb',
-    transition: 'transform 0.2s, box-shadow 0.2s',
-  },
-  recImageWrapper: {
-    width: '100%',
-    height: '200px',
-    background: '#f3f4f6',
-  },
-  recImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
-  recBody: {
-    padding: '16px',
-  },
-  recTitle: {
-    fontFamily: "'DM Sans', sans-serif",
-    fontSize: '16px',
-    fontWeight: '700',
-    color: '#0d0d0d',
-    margin: '0',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
   },
 
   /* Lightbox */

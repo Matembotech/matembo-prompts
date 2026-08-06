@@ -1,65 +1,40 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
+import { useNavigate } from 'react-router-dom';
+import { incrementCopy } from '../lib/prompts';
+import { canonicalPromptUrl } from '../lib/share';
+import { isNewPrompt, isTrendingPrompt } from '../lib/badges';
+import { timeAgo } from '../lib/format';
+import { NewBadge, TrendingBadge } from './Badges';
+import CategoryBadge from './CategoryBadge';
+import PromptSnippet from './PromptSnippet';
+import LikeButton from './LikeButton';
+import BookmarkButton from './BookmarkButton';
+import ShareButton from './ShareButton';
+import { resolveAuthorName } from '../lib/authors';
+import { DEFAULT_AUTHOR } from '../lib/config';
+import { IconPhoto, IconVideo, IconBrokenImage } from './icons';
 
-/* ── Tabler-style SVG icons (inline to avoid external deps) ── */
-const IconPhoto = ({ size = 16, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-    <circle cx="8.5" cy="8.5" r="1.5" />
-    <polyline points="21 15 16 10 5 21" />
-  </svg>
-);
-
-const IconVideo = ({ size = 16, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="23 7 16 12 23 17 23 7" />
-    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-  </svg>
-);
-
-const IconBrokenImage = ({ size = 36, color = '#9ca3af' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-    <circle cx="8.5" cy="8.5" r="1.5" />
-    <path d="M21 15l-5-5L5 21" />
-    <line x1="3" y1="3" x2="21" y2="21" />
-  </svg>
-);
-
-/* ══════════════════════════════════════════════
-   PROMPT CARD COMPONENT
-   ══════════════════════════════════════════════ */
-function PromptCard({ id, slug, title, image_url, image_prompt, video_prompt, copy_count }) {
+function PromptCard({ prompt }) {
+  const navigate = useNavigate();
   const [imgError, setImgError] = useState(false);
   const [copiedImage, setCopiedImage] = useState(false);
   const [copiedVideo, setCopiedVideo] = useState(false);
-  const [localCount, setLocalCount] = useState(copy_count || 0);
   const [hovered, setHovered] = useState(false);
 
-  const hasImagePrompt = image_prompt && image_prompt.trim().length > 0;
-  const hasVideoPrompt = video_prompt && video_prompt.trim().length > 0;
+  const slug = prompt?.slug || prompt?.id;
+  const detailPath = `/prompts/${slug}`;
+  const hasImagePrompt = prompt?.image_prompt && prompt.image_prompt.trim().length > 0;
+  const hasVideoPrompt = prompt?.video_prompt && prompt.video_prompt.trim().length > 0;
 
-  /* ─── Increment counter (optimistic + Supabase) ─── */
-  const incrementCount = () => {
-    const newCount = localCount + 1;
-    setLocalCount(newCount);
-    supabase
-      .from('prompts')
-      .update({ copy_count: newCount })
-      .eq('id', id)
-      .then(({ error }) => {
-        if (error) console.error('Failed to update copy_count:', error);
-      });
-  };
+  const openPrompt = () => navigate(detailPath);
 
-  /* ─── Copy handlers ─── */
   const handleCopyImage = async (e) => {
-    e?.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     try {
-      await navigator.clipboard.writeText(image_prompt);
+      await navigator.clipboard.writeText(prompt.image_prompt);
       setCopiedImage(true);
-      incrementCount();
+      incrementCopy(prompt.id);
       setTimeout(() => setCopiedImage(false), 2000);
     } catch (err) {
       console.error('Copy failed:', err);
@@ -67,90 +42,147 @@ function PromptCard({ id, slug, title, image_url, image_prompt, video_prompt, co
   };
 
   const handleCopyVideo = async (e) => {
-    e?.stopPropagation();
+    e.preventDefault();
+    e.stopPropagation();
     try {
-      await navigator.clipboard.writeText(video_prompt);
+      await navigator.clipboard.writeText(prompt.video_prompt);
       setCopiedVideo(true);
-      incrementCount();
+      incrementCopy(prompt.id);
       setTimeout(() => setCopiedVideo(false), 2000);
     } catch (err) {
       console.error('Copy failed:', err);
     }
   };
 
+  const showNew = isNewPrompt(prompt?.created_at);
+  const showTrending = isTrendingPrompt(prompt?.trending_until);
+
   return (
-    <div
-        style={{
-          ...styles.card,
-          ...(hovered ? styles.cardHover : {}),
-        }}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-      >
-        <style>{btnCSS}</style>
-        {/* ── Image ── */}
-        <Link
-          to={`/prompts/${slug || id}`}
-          style={{
-            ...styles.imageWrapper,
-            cursor: imgError ? 'default' : 'pointer',
-            display: 'block',
-          }}
-          onClick={(e) => imgError && e.preventDefault()}
-        >
-          {imgError ? (
-            <div style={styles.placeholder}>
-              <IconBrokenImage />
-            </div>
-          ) : (
-            <img
-              src={image_url}
-              alt="AI prompt visual"
-              loading="lazy"
-              style={styles.image}
-              onError={() => setImgError(true)}
-            />
-          )}
-        </Link>
+    <article
+      role="link"
+      tabIndex={0}
+      aria-label={`Open prompt: ${prompt?.title || 'AI Prompt'}`}
+      onClick={openPrompt}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openPrompt();
+        }
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        ...styles.card,
+        ...(hovered ? styles.cardHover : {}),
+      }}
+    >
+      <style>{btnCSS}</style>
 
-        {/* ── Body ── */}
-        <div style={styles.body}>
-          {title && <h3 style={styles.cardTitle}>{title}</h3>}
-          {/* Copy Buttons */}
-          {(hasImagePrompt || hasVideoPrompt) && (
-            <div className="flex flex-col xl:flex-row gap-[10px]">
-              {hasImagePrompt && (
-                <button
-                  onClick={handleCopyImage}
-                  className="interactive-btn prompt-card-btn"
-                  style={{
-                    ...styles.btnBase,
-                    ...(copiedImage ? styles.btnImageCopied : styles.btnImageDefault),
-                  }}
-                >
-                  <IconPhoto size={14} color={copiedImage ? '#ffffff' : '#0a6b5e'} />
-                  <span>{copiedImage ? 'Copied! ✓' : 'Copy Image Prompt'}</span>
-                </button>
-              )}
+      {/* ── Image + badges ── */}
+      <div style={styles.imageWrapper}>
+        {imgError ? (
+          <div style={styles.placeholder}>
+            <IconBrokenImage />
+          </div>
+        ) : (
+          <img
+            src={prompt.image_url}
+            alt={prompt.image_prompt?.slice(0, 80) || 'AI prompt visual'}
+            loading="lazy"
+            style={styles.image}
+            onError={() => setImgError(true)}
+          />
+        )}
+        {/* Category badge + New/Trending pinned to the top-left of the image */}
+        {(prompt?.category || showNew || showTrending) && (
+          <div style={styles.badgeCol}>
+            {prompt?.category && <CategoryBadge category={prompt.category} size="sm" />}
+            {(showNew || showTrending) && (
+              <div style={styles.badgeRow}>
+                {showNew && <NewBadge />}
+                {showTrending && <TrendingBadge />}
+              </div>
+            )}
+          </div>
+        )}
 
-              {hasVideoPrompt && (
-                <button
-                  onClick={handleCopyVideo}
-                  className="interactive-btn prompt-card-btn"
-                  style={{
-                    ...styles.btnBase,
-                    ...(copiedVideo ? styles.btnVideoCopied : styles.btnVideoDefault),
-                  }}
-                >
-                  <IconVideo size={14} color="#ffffff" />
-                  <span>{copiedVideo ? 'Copied! ✓' : 'Copy Video Prompt'}</span>
-                </button>
-              )}
-            </div>
+        {/* Like control pinned to the top-right of the image */}
+        <div style={styles.likeOverlay}>
+          <LikeButton promptId={prompt.id} count={prompt.like_count} size={16} overlay />
+        </div>
+      </div>
+
+      {/* ── Body ── */}
+      <div style={styles.body}>
+        {prompt?.title && <h3 style={styles.cardTitle}>{prompt.title}</h3>}
+
+        <PromptSnippet
+          excerpt={prompt.excerpt}
+          imagePrompt={prompt.image_prompt}
+          videoPrompt={prompt.video_prompt}
+          maxLength={150}
+          lines={3}
+          style={{ marginBottom: '14px' }}
+        />
+
+        {/* ── Meta row: date ── */}
+        <div style={styles.metaRow}>
+          {prompt?.created_at && (
+            <span style={styles.date}>{timeAgo(prompt.created_at)}</span>
           )}
         </div>
 
+        {/* ── Actions ── */}
+        {(hasImagePrompt || hasVideoPrompt) && (
+          <div style={styles.actionsRow}>
+            {hasImagePrompt && (
+              <button
+                onClick={handleCopyImage}
+                className="interactive-btn prompt-card-btn"
+                style={{
+                  ...styles.btnBase,
+                  ...(copiedImage ? styles.btnImageCopied : styles.btnImageDefault),
+                }}
+              >
+                <IconPhoto size={14} color={copiedImage ? '#ffffff' : '#0a6b5e'} />
+                <span>{copiedImage ? 'Copied! ✓' : 'Copy Prompt'}</span>
+              </button>
+            )}
+
+            {hasVideoPrompt && (
+              <button
+                onClick={handleCopyVideo}
+                className="interactive-btn prompt-card-btn"
+                style={{
+                  ...styles.btnBase,
+                  ...(copiedVideo ? styles.btnVideoCopied : styles.btnVideoDefault),
+                }}
+              >
+                <IconVideo size={14} color="#ffffff" />
+                <span>{copiedVideo ? 'Copied! ✓' : 'Copy Prompt'}</span>
+              </button>
+            )}
+
+            <div style={styles.socialGroup}>
+              <BookmarkButton promptId={prompt.id} />
+              <ShareButton
+                variant="pill"
+                promptId={prompt.id}
+                url={canonicalPromptUrl(slug, prompt.id)}
+                title={prompt.title}
+                text={prompt.excerpt || prompt.image_prompt || prompt.video_prompt}
+                iconSize={16}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Author at the end of the card ── */}
+        <div style={styles.authorFooter}>
+          by {resolveAuthorName(prompt.author, DEFAULT_AUTHOR)}
+        </div>
       </div>
+    </article>
   );
 }
 
@@ -164,7 +196,11 @@ const styles = {
     overflow: 'hidden',
     transition: 'transform 0.3s ease, box-shadow 0.3s ease',
     boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-    cursor: 'default',
+    cursor: 'pointer',
+    outline: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
   },
   cardHover: {
     transform: 'translateY(-4px)',
@@ -174,7 +210,8 @@ const styles = {
   /* Image */
   imageWrapper: {
     width: '100%',
-    height: '280px',
+    aspectRatio: '4 / 3',
+    maxHeight: '360px',
     overflow: 'hidden',
     borderRadius: '16px 16px 0 0',
     background: '#f3f4f6',
@@ -184,6 +221,7 @@ const styles = {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
+    objectPosition: 'top',
     display: 'block',
   },
   placeholder: {
@@ -194,36 +232,102 @@ const styles = {
     justifyContent: 'center',
     background: '#f3f4f6',
   },
+  badgeCol: {
+    position: 'absolute',
+    top: '12px',
+    left: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '6px',
+    zIndex: 2,
+    pointerEvents: 'none',
+  },
+  badgeRow: {
+    display: 'flex',
+    gap: '6px',
+    pointerEvents: 'none',
+  },
+  likeOverlay: {
+    position: 'absolute',
+    top: '12px',
+    right: '12px',
+    zIndex: 2,
+  },
 
   /* Body */
   body: {
-    padding: '16px 20px',
+    padding: '16px 20px 18px',
     borderLeft: '0.5px solid #e5e7eb',
     borderRight: '0.5px solid #e5e7eb',
     borderBottom: '0.5px solid #e5e7eb',
     borderRadius: '0 0 16px 16px',
     background: '#ffffff',
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
   },
   cardTitle: {
-    fontSize: '15px',
+    fontSize: '16px',
     fontWeight: 700,
     color: '#0d0d0d',
-    margin: '0 0 12px 0',
+    margin: '0 0 8px 0',
     fontFamily: "'DM Sans', sans-serif",
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
 
+  /* Meta row */
+  metaRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: '8px',
+    marginBottom: '10px',
+  },
+  date: {
+    fontSize: '12px',
+    color: '#9ca3af',
+    fontWeight: 500,
+    fontFamily: "'DM Sans', sans-serif",
+    whiteSpace: 'nowrap',
+  },
+  authorFooter: {
+    marginTop: '14px',
+    paddingTop: '10px',
+    borderTop: '1px solid #f3f4f6',
+    fontSize: '12px',
+    color: '#9ca3af',
+    fontWeight: 500,
+    fontFamily: "'DM Sans', sans-serif",
+    textTransform: 'lowercase',
+  },
+
+  /* Actions */
+  actionsRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginTop: 'auto',
+  },
+  socialGroup: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginLeft: 'auto',
+    flexShrink: 0,
+  },
+
   /* Buttons */
   btnBase: {
-    flex: 1,
     minWidth: 0,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '6px',
-    padding: '9px 14px',
+    padding: '8px 14px',
     borderRadius: '999px',
     fontSize: '13px',
     fontWeight: 700,

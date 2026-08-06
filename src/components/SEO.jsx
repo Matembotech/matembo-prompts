@@ -2,8 +2,8 @@ import { Helmet } from 'react-helmet-async'
 
 const SITE_NAME = 'Matembo Prompts'
 export const SITE_URL = 'https://www.matembotech.site'
-const DEFAULT_TITLE = 'Matembo Prompts — where AI creators come to steal prompts'
-const DEFAULT_DESCRIPTION = 'Matembo Prompts — where AI creators come to steal prompts. Browse, copy and use professionally crafted AI prompts for image and video generation.'
+const DEFAULT_TITLE = "Matembo Prompts — East Africa's #1 AI Image Prompt Library"
+const DEFAULT_DESCRIPTION = 'Discover, copy, and create stunning AI images with professionally crafted prompts for AI creators.'
 const DEFAULT_IMAGE = `${SITE_URL}/logo.webp`
 
 function SEO({ title, description, url, image, type = 'website', noindex = false, jsonLd }) {

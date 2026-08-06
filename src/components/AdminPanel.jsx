@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { cloudinaryConfig } from '../cloudinaryConfig';
+import { fetchCategories, getRootCategories, getSubcategories, getCategoryById } from '../lib/categories';
+import { fetchSubjects } from '../lib/subjects';
+import { useAuth } from '../context/AuthContext';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import StatsRow from './admin/StatsRow';
 
 function AdminPanel() {
+  const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
+
   // ─── App state ───
   const [activePage, setActivePage] = useState('analytics');
-
-  // ─── Auth state ───
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [isPwdFocused, setIsPwdFocused] = useState(false);
 
   // ─── Form state ───
   const [imageFile, setImageFile] = useState(null);
@@ -25,6 +25,10 @@ function AdminPanel() {
   const [description, setDescription] = useState('');
   const [imagePrompt, setImagePrompt] = useState('');
   const [videoPrompt, setVideoPrompt] = useState('');
+  const [excerpt, setExcerpt] = useState('');
+  const [libraryId, setLibraryId] = useState('');
+  const [subcategoryId, setSubcategoryId] = useState('');
+  const [subjectId, setSubjectId] = useState('');
   const [imagePromptFocused, setImagePromptFocused] = useState(false);
   const [videoPromptFocused, setVideoPromptFocused] = useState(false);
   const [formError, setFormError] = useState('');
@@ -88,6 +92,10 @@ function AdminPanel() {
   const [editDescription, setEditDescription] = useState('');
   const [editImagePrompt, setEditImagePrompt] = useState('');
   const [editVideoPrompt, setEditVideoPrompt] = useState('');
+  const [editExcerpt, setEditExcerpt] = useState('');
+  const [editLibraryId, setEditLibraryId] = useState('');
+  const [editSubcategoryId, setEditSubcategoryId] = useState('');
+  const [editSubjectId, setEditSubjectId] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const editFileInputRef = useRef(null);
 
@@ -125,21 +133,63 @@ function AdminPanel() {
   };
 
   useEffect(() => {
-    if (isAuthed) {
+    if (isAdmin) {
       fetchPrompts();
     }
-  }, [isAuthed]);
+  }, [isAdmin]);
 
-  // ─── Password check ───
-  const handleLogin = (e) => {
-    e.preventDefault();
-    if (passwordInput === import.meta.env.VITE_ADMIN_PASSWORD) {
-      setIsAuthed(true);
-      setAuthError('');
-    } else {
-      setAuthError('Wrong password. Try again.');
+  // ─── Categories for dropdowns ───
+  const [categories, setCategories] = useState([]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchCategories(true).then(setCategories).catch(() => {});
+  }, [isAdmin]);
+
+  // ─── Subjects for dropdowns ───
+  const [subjects, setSubjects] = useState([]);
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchSubjects(true).then(setSubjects).catch(() => {});
+  }, [isAdmin]);
+
+  // ─── Contact messages ───
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageFilter, setMessageFilter] = useState('');
+
+  const fetchMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const { data, error } = await supabase
+        .from('contact_messages')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setMessages(data || []);
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to load messages', 'error');
+    } finally {
+      setLoadingMessages(false);
     }
   };
+
+  useEffect(() => {
+    if (isAdmin) fetchMessages();
+  }, [isAdmin]);
+
+  const filteredMessages = messages.filter((m) =>
+    (m.full_name + ' ' + m.email + ' ' + m.subject + ' ' + m.message)
+      .toLowerCase()
+      .includes(messageFilter.toLowerCase())
+  );
+
+  // Derived category options (add form).
+  const rootCategories = getRootCategories(categories);
+  const librarySubcats = getSubcategories(categories, libraryId);
+  const resolvedCategoryId = subcategoryId || libraryId || '';
+  const editLibrarySubcats = getSubcategories(categories, editLibraryId);
+  const resolvedEditCategoryId = editSubcategoryId || editLibraryId || '';
 
   // ─── Image selection ───
   const handleImageSelect = (e) => {
@@ -208,6 +258,9 @@ function AdminPanel() {
           title: title.trim() || null,
           slug: slug.trim() || null,
           description: description.trim() || null,
+          excerpt: excerpt.trim() || null,
+          category_id: resolvedCategoryId || null,
+          subject_id: subjectId || null,
           image_url: finalImageUrl,
           image_prompt: imagePrompt.trim() || null,
           video_prompt: videoPrompt.trim() || null,
@@ -231,6 +284,10 @@ function AdminPanel() {
       setImageSource('file');
       setImagePrompt('');
       setVideoPrompt('');
+      setLibraryId('');
+      setSubcategoryId('');
+      setSubjectId('');
+      setExcerpt('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchPrompts(); // Refresh grid
     } catch (err) {
@@ -286,12 +343,52 @@ function AdminPanel() {
     }
   };
 
+  const deleteMessage = async (id) => {
+    try {
+      const { error } = await supabase.from('contact_messages').delete().eq('id', id);
+      if (error) throw error;
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      showToast('Message deleted', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to delete message', 'error');
+    }
+  };
+
+  // Quick-assign category / subject straight from the manage grid.
+  const quickAssign = async (id, patch) => {
+    try {
+      const { error } = await supabase.from('prompts').update(patch).eq('id', id);
+      if (error) {
+        showToast(error.message || 'Failed to update', 'error');
+        return;
+      }
+      setPrompts((prev) => prev.map((pr) => (pr.id === id ? { ...pr, ...patch } : pr)));
+      showToast('Saved', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to update', 'error');
+    }
+  };
+
   // ─── Edit Flow ───
+  const resolveCategorySelection = (catId) => {
+    if (!catId) return { libId: '', subId: '' };
+    const cat = categories.find((c) => String(c.id) === String(catId));
+    if (!cat) return { libId: '', subId: '' };
+    if (cat.parent_id) return { libId: String(cat.parent_id), subId: String(cat.id) };
+    return { libId: String(cat.id), subId: '' };
+  };
+
   const openEditModal = (prompt) => {
+    const { libId, subId } = resolveCategorySelection(prompt.category_id);
     setEditingPromptId(prompt.id);
     setEditTitle(prompt.title || '');
     setEditSlug(prompt.slug || '');
     setEditDescription(prompt.description || '');
+    setEditLibraryId(libId);
+    setEditSubcategoryId(subId);
+    setEditSubjectId(prompt.subject_id || '');
+    setEditExcerpt(prompt.excerpt || '');
     setEditImagePreview(prompt.image_url);
     setEditImageUrl(prompt.image_url || '');
     setEditImageFile(null);
@@ -339,6 +436,9 @@ function AdminPanel() {
           title: editTitle.trim() || null,
           slug: editSlug.trim() || null,
           description: editDescription.trim() || null,
+          excerpt: editExcerpt.trim() || null,
+          category_id: resolvedEditCategoryId || null,
+          subject_id: editSubjectId || null,
           image_url: finalImageUrl,
           image_prompt: editImagePrompt.trim() || null,
           video_prompt: editVideoPrompt.trim() || null,
@@ -362,46 +462,19 @@ function AdminPanel() {
   };
 
   /* ════════════════════════════════════════════
-     PASSWORD SCREEN
+     AUTH / GATE SCREEN
      ════════════════════════════════════════════ */
-  if (!isAuthed) {
+  if (authLoading) {
     return (
-      <div style={{ ...styles.passwordPage, padding: '24px 16px' }}>
-        <form onSubmit={handleLogin} style={{ ...styles.passwordCard, padding: isMobile ? '28px 20px' : '40px 32px', borderRadius: isMobile ? '16px' : '20px' }}>
-          <div style={styles.lockIcon}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </div>
-          <h2 style={{ ...styles.passwordHeading, fontSize: isMobile ? '20px' : '22px' }}>Admin Access</h2>
-          <p style={styles.passwordSubtext}>Enter your password to continue</p>
-
-          <input
-            type="password"
-            value={passwordInput}
-            onChange={(e) => {
-              setPasswordInput(e.target.value);
-              setAuthError('');
-            }}
-            onFocus={() => setIsPwdFocused(true)}
-            onBlur={() => setIsPwdFocused(false)}
-            placeholder="Password"
-            style={{
-              ...styles.passwordInput,
-              ...(isPwdFocused ? { borderColor: '#0F6E56' } : {})
-            }}
-            autoFocus
-          />
-
-          {authError && <p style={styles.passwordErrorMsg}>{authError}</p>}
-
-          <button type="submit" style={styles.passwordBtn}>
-            Enter
-          </button>
-        </form>
+      <div style={{ ...styles.passwordPage, padding: '24px 16px', alignItems: 'center', justifyContent: 'center', display: 'flex' }}>
+        <p style={styles.passwordSubtext}>Loading…</p>
       </div>
     );
+  }
+
+  if (!isAdmin) {
+    const gateProps = { isMobile, isAuthenticated };
+    return <AdminGate {...gateProps} />;
   }
 
   /* ════════════════════════════════════════════
@@ -412,6 +485,7 @@ function AdminPanel() {
       case 'analytics': return 'Analytics Overview';
       case 'prompts': return 'Manage Prompts';
       case 'add': return 'Add New Prompt';
+      case 'messages': return 'Contact Messages';
       case 'settings': return 'Settings';
       default: return 'Admin Panel';
     }
@@ -531,6 +605,28 @@ function AdminPanel() {
           </div>
 
           {(isMobile && sidebarOpen) && <h3 style={{...styles.navSectionTitle, marginTop: '8px'}}>System</h3>}
+
+          <div className="nav-item-wrap" style={{ width: '100%', display: 'flex', justifyContent: (isMobile && sidebarOpen) ? 'flex-start' : 'center', padding: (isMobile && sidebarOpen) ? '0 10px' : '0', position: 'relative' }}>
+            <button 
+              className="nav-item-btn"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', 
+                padding: (isMobile && sidebarOpen) ? '7px 10px' : '10px', 
+                borderRadius: '8px', fontSize: '13px', cursor: 'pointer', border: 'none', 
+                background: activePage === 'messages' ? '#E1F5EE' : 'transparent', 
+                color: activePage === 'messages' ? '#0F6E56' : '#6b7280',
+                fontWeight: activePage === 'messages' ? 500 : 400,
+                width: (isMobile && sidebarOpen) ? '100%' : 'auto', 
+                textAlign: 'left', outline: 'none'
+              }} 
+              onClick={() => { setActivePage('messages'); if (isMobile) setSidebarOpen(false); }}
+              title={!isMobile ? "Messages" : ""}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              {(isMobile && sidebarOpen) && <span>Messages</span>}
+              {(isMobile && sidebarOpen) && messages.length > 0 && <span style={styles.navBadge}>{messages.length}</span>}
+            </button>
+          </div>
           
           <div className="nav-item-wrap" style={{ width: '100%', display: 'flex', justifyContent: (isMobile && sidebarOpen) ? 'flex-start' : 'center', padding: (isMobile && sidebarOpen) ? '0 10px' : '0', position: 'relative' }}>
             <button 
@@ -668,6 +764,56 @@ function AdminPanel() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="A brief description of what this prompt does..."
+                    style={{ ...styles.textarea, height: '60px' }}
+                  />
+                </div>
+
+                <div style={styles.fieldGroup}>
+                  <label style={styles.label}>Library / Category (Optional)</label>
+                  <select
+                    value={libraryId}
+                    onChange={(e) => { setLibraryId(e.target.value); setSubcategoryId(''); }}
+                    style={styles.urlInput}
+                  >
+                    <option value="">No category</option>
+                    {rootCategories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {librarySubcats.length > 0 && (
+                    <select
+                      value={subcategoryId}
+                      onChange={(e) => setSubcategoryId(e.target.value)}
+                      style={styles.urlInput}
+                    >
+                      <option value="">— Choose subcategory —</option>
+                      {librarySubcats.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div style={styles.fieldGroup}>
+                  <label style={styles.label}>Subject (Men / Women / Children / Unisex)</label>
+                  <select
+                    value={subjectId}
+                    onChange={(e) => setSubjectId(e.target.value)}
+                    style={styles.urlInput}
+                  >
+                    <option value="">No subject</option>
+                    {subjects.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={styles.fieldGroup}>
+                  <label style={styles.label}>Short Excerpt (Optional)</label>
+                  <textarea
+                    value={excerpt}
+                    onChange={(e) => setExcerpt(e.target.value)}
+                    placeholder="A short line shown on the card (1-2 sentences)..."
                     style={{ ...styles.textarea, height: '60px' }}
                   />
                 </div>
@@ -883,6 +1029,33 @@ function AdminPanel() {
                             </div>
                           </div>
                         </div>
+
+                        {/* ── Quick assign category / subject ── */}
+                        <div style={styles.quickAssignRow}>
+                          <select
+                            value={p.category_id || ''}
+                            onChange={(e) => quickAssign(p.id, { category_id: e.target.value || null })}
+                            style={styles.quickSelect}
+                            title="Assign category"
+                          >
+                            <option value="">No category</option>
+                            {categories.map((c) => (
+                              <option key={c.id} value={c.id}>{c.parent_id ? `— ${c.name}` : c.name}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={p.subject_id || ''}
+                            onChange={(e) => quickAssign(p.id, { subject_id: e.target.value || null })}
+                            style={styles.quickSelect}
+                            title="Assign subject"
+                          >
+                            <option value="">No subject</option>
+                            {subjects.map((s) => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
                         <div style={{ ...styles.gridActionsRow, padding: isMobile ? '8px' : '12px', gap: isMobile ? '6px' : '8px', display: 'flex', flexWrap: 'wrap' }}>
                           <button className="interactive-btn" style={{ ...styles.newBtnEdit, fontSize: isMobile ? '12px' : '14px', padding: isMobile ? '6px' : '8px', flex: 1 }} onClick={() => handleCopyShareLink(p.slug)}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
@@ -928,8 +1101,69 @@ function AdminPanel() {
             </div>
           )}
 
+          {activePage === 'messages' && (
+            <div style={styles.messagesSection}>
+              <div style={styles.manageHeaderRow}>
+                <div>
+                  <h2 style={{ ...styles.manageHeading, fontSize: isMobile ? '18px' : '24px' }}>Contact Messages</h2>
+                  <p style={styles.manageSubtitle}>Messages sent from the contact page</p>
+                </div>
+                <button style={styles.refreshBtn} onClick={fetchMessages}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                </button>
+              </div>
+
+              <input
+                type="text"
+                placeholder="Search messages..."
+                value={messageFilter}
+                onChange={(e) => setMessageFilter(e.target.value)}
+                style={{ ...styles.searchInput, width: '100%', boxSizing: 'border-box', marginBottom: '16px' }}
+              />
+
+              {loadingMessages ? (
+                <div style={{ ...styles.messagesEmpty, color: '#6b7280' }}>Loading messages…</div>
+              ) : filteredMessages.length === 0 ? (
+                <div style={styles.messagesEmpty}>
+                  <p style={styles.messagesEmptyText}>No messages yet.</p>
+                  <p style={styles.messagesEmptySub}>Messages submitted via the contact page will appear here.</p>
+                </div>
+              ) : (
+                <div style={styles.messageList}>
+                  {filteredMessages.map((m) => (
+                    <div key={m.id} style={styles.messageCard}>
+                      <div style={styles.messageHeader}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={styles.messageTitleRow}>
+                            <span style={styles.messageSubject}>{m.subject}</span>
+                            <span style={styles.messageDate}>
+                              {m.created_at ? new Date(m.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}
+                            </span>
+                          </div>
+                          <div style={styles.messageFrom}>
+                            <strong>{m.full_name}</strong>
+                            <a href={`mailto:${m.email}`} style={styles.messageEmail}>&nbsp;&lt;{m.email}&gt;</a>
+                          </div>
+                        </div>
+                        <button style={styles.messageDeleteBtn} onClick={() => deleteMessage(m.id)} title="Delete message">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                      </div>
+                      <p style={styles.messageBody}>{m.message}</p>
+                      <a className="interactive-btn" href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject)}`} style={styles.messageReplyBtn}>Reply</a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activePage === 'settings' && (
-            <div>Settings coming soon</div>
+            <CategoriesManager
+              categories={categories}
+              onChanged={(next) => setCategories(next)}
+              showToast={showToast}
+            />
           )}
         </main>
       </div>
@@ -985,6 +1219,56 @@ function AdminPanel() {
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="A brief description of what this prompt does..."
+                  style={{ ...styles.textarea, height: '60px' }}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Library / Category (Optional)</label>
+                <select
+                  value={editLibraryId}
+                  onChange={(e) => { setEditLibraryId(e.target.value); setEditSubcategoryId(''); }}
+                  style={styles.urlInput}
+                >
+                  <option value="">No category</option>
+                  {rootCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {editLibrarySubcats.length > 0 && (
+                  <select
+                    value={editSubcategoryId}
+                    onChange={(e) => setEditSubcategoryId(e.target.value)}
+                    style={styles.urlInput}
+                  >
+                    <option value="">No subcategory</option>
+                    {editLibrarySubcats.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Subject (Men / Women / Children / Unisex)</label>
+                <select
+                  value={editSubjectId}
+                  onChange={(e) => setEditSubjectId(e.target.value)}
+                  style={styles.urlInput}
+                >
+                  <option value="">No subject</option>
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Short Excerpt (Optional)</label>
+                <textarea
+                  value={editExcerpt}
+                  onChange={(e) => setEditExcerpt(e.target.value)}
+                  placeholder="A short line shown on the card (1-2 sentences)..."
                   style={{ ...styles.textarea, height: '60px' }}
                 />
               </div>
@@ -1221,9 +1505,28 @@ const styles = {
   promptPreview: { fontSize: '11px', color: '#6b7280', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: '26px' },
   gridMetaRow: { display: 'flex', gap: '12px', marginTop: '6px' },
   metaItem: { fontSize: '10px', color: '#9ca3af', display: 'flex', alignItems: 'center', gap: '4px' },
+  quickAssignRow: { display: 'flex', gap: '8px', padding: '10px 12px', borderTop: '1px solid #f3f4f6', flexDirection: 'column' },
+  quickSelect: { width: '100%', padding: '6px 8px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '12px', fontFamily: "'DM Sans', sans-serif", outline: 'none', background: '#fff', color: '#111827' },
   gridActionsRow: { padding: '8px 12px', borderTop: '1px solid #f3f4f6', display: 'flex', gap: '8px' },
   newBtnEdit: { flex: 1, padding: '6px', border: '1.5px solid #0F6E56', color: '#0F6E56', background: 'transparent', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' },
   newBtnDelete: { flex: 1, padding: '6px', border: '1.5px solid #dc2626', color: '#dc2626', background: 'transparent', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' },
+
+  /* ─── Messages / Inbox ─── */
+  messagesSection: { width: '100%' },
+  messagesEmpty: { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '40px 24px', textAlign: 'center' },
+  messagesEmptyText: { fontSize: '16px', fontWeight: 600, color: '#0d0d0d', margin: '0 0 4px 0' },
+  messagesEmptySub: { fontSize: '13px', color: '#9ca3af', margin: 0 },
+  messageList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  messageCard: { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  messageHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' },
+  messageTitleRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' },
+  messageSubject: { fontSize: '15px', fontWeight: 700, color: '#0d0d0d' },
+  messageDate: { fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap' },
+  messageFrom: { fontSize: '13px', color: '#4b5563', marginTop: '2px', display: 'flex', flexWrap: 'wrap' },
+  messageEmail: { color: '#0F6E56', textDecoration: 'none', fontSize: '13px' },
+  messageDeleteBtn: { width: '30px', height: '30px', background: 'transparent', border: '1px solid #fee2e2', borderRadius: '8px', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  messageBody: { fontSize: '14px', color: '#4b5563', lineHeight: '1.6', margin: 0, whiteSpace: 'pre-wrap' },
+  messageReplyBtn: { alignSelf: 'flex-start', background: '#0F6E56', color: '#ffffff', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', textDecoration: 'none' },
 
   /* ─── Modals ─── */
   modalOverlay: {
@@ -1359,5 +1662,200 @@ const styles = {
     background: '#dc2626',
   },
 };
+
+/* ════════════════════════════════════════════
+   CATEGORIES MANAGER
+   ════════════════════════════════════════════ */
+function CategoriesManager({ categories, onChanged, showToast }) {
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [sortOrder, setSortOrder] = useState(0);
+  const [parentId, setParentId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+  const rootCategories = getRootCategories(categories);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!name.trim()) {
+      setError('Category name is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('categories')
+        .insert({
+          name: name.trim(),
+          slug: slug.trim() || slugify(name),
+          sort_order: Number(sortOrder) || 0,
+          parent_id: parentId || null,
+        })
+        .select()
+        .single();
+      if (err) {
+        setError(err.message || 'Failed to add category.');
+        return;
+      }
+      onChanged([...(categories || []), data].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+      showToast('Category added', 'success');
+      setName('');
+      setSlug('');
+      setSortOrder(0);
+      setParentId('');
+    } catch (err) {
+      setError(err.message || 'Failed to add category.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const { error: err } = await supabase.from('categories').delete().eq('id', id);
+    if (err) {
+      showToast(err.message || 'Failed to delete category', 'error');
+      return;
+    }
+    onChanged((categories || []).filter((c) => c.id !== id));
+    showToast('Category deleted', 'success');
+  };
+
+  const fieldStyle = { flex: 1, minWidth: 0, padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '14px', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div>
+        <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#0d0d0d', margin: '0 0 4px 0', fontFamily: "'Syne', sans-serif", marginTop: 0 }}>Manage Categories</h3>
+        <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>Categories drive the filter pills on the homepage.</p>
+      </div>
+
+      {error && <p style={{ color: '#dc2626', fontSize: '14px' }}>{error}</p>}
+
+      {/* Add form */}
+      <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '20px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Category name (e.g. Cinematic)" style={fieldStyle} />
+          <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="slug (auto if blank)" style={fieldStyle} />
+          <input value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} type="number" placeholder="Order" style={{ ...fieldStyle, maxWidth: '90px' }} />
+          <select value={parentId} onChange={(e) => setParentId(e.target.value)} style={{ ...fieldStyle, maxWidth: '220px' }}>
+            <option value="">Top-level library (no parent)</option>
+            {rootCategories.map((c) => (
+              <option key={c.id} value={c.id}>Sub of: {c.name}</option>
+            ))}
+          </select>
+        </div>
+        <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Tip: leave Parent empty for a top-level library. Set a Parent to nest a format under it (e.g. Flyers under Business &amp; Professional).</p>
+        <button type="submit" disabled={busy} style={styles.submitBtn}>{busy ? 'Adding…' : 'Add Category'}</button>
+      </form>
+
+      {/* List */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {(categories || []).map((c) => {
+          const parent = getCategoryById(categories, c.parent_id);
+          return (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '12px 16px', marginLeft: c.parent_id ? '24px' : 0 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontWeight: 600, color: '#0d0d0d', fontSize: '14px' }}>{c.name}</span>
+                <span style={{ color: '#9ca3af', fontSize: '12px', marginLeft: '8px' }}>
+                  {parent ? `under ${parent.name}` : 'library'}{' '}
+                  / {c.slug}
+                </span>
+              </div>
+              <button type="button" onClick={() => handleDelete(c.id)} style={{ background: 'transparent', border: '1px solid #fee2e2', color: '#dc2626', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                Delete
+              </button>
+            </div>
+          );
+        })}
+        {(!categories || categories.length === 0) && (
+          <p style={{ color: '#6b7280', fontSize: '14px' }}>No categories yet. Add your first one above.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   ADMIN GATE (Supabase Auth)
+   Shown when the visitor is not an admin. Signs in / links to sign in, then
+   enforces that the signed-in profile actually has role = 'admin'.
+   ════════════════════════════════════════════ */
+function AdminGate({ isMobile, isAuthenticated }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) setError(err.message || 'Sign in failed.');
+    } catch (err) {
+      setError(err.message || 'Sign in failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ ...styles.passwordPage, padding: '24px 16px' }}>
+      {isAuthenticated ? (
+        <div style={{ ...styles.passwordCard, padding: isMobile ? '28px 20px' : '40px 32px', borderRadius: isMobile ? '16px' : '20px', textAlign: 'center' }}>
+          <h2 style={styles.passwordHeading}>Not authorized</h2>
+          <p style={styles.passwordSubtext}>
+            Your account is signed in but does not have admin permissions.
+          </p>
+          <button type="button" onClick={() => supabase.auth.signOut()} style={styles.passwordBtn}>
+            Sign out
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} style={{ ...styles.passwordCard, padding: isMobile ? '28px 20px' : '40px 32px', borderRadius: isMobile ? '16px' : '20px' }}>
+          <div style={styles.lockIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h2 style={{ ...styles.passwordHeading, fontSize: isMobile ? '20px' : '22px' }}>Admin Access</h2>
+          <p style={styles.passwordSubtext}>Sign in with an admin account to continue</p>
+
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
+            autoFocus
+            style={styles.passwordInput}
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            style={styles.passwordInput}
+          />
+
+          {error && <p style={styles.passwordErrorMsg}>{error}</p>}
+
+          <button type="submit" disabled={busy} style={styles.passwordBtn}>
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+
+          <Link to={`/signin?redirect=${encodeURIComponent('/admin')}`} style={{ ...styles.passwordSubtext, display: 'block', textAlign: 'center', marginTop: '12px', color: '#0F6E56', textDecoration: 'underline', cursor: 'pointer' }}>
+            Forgot password or need an account?
+          </Link>
+        </form>
+      )}
+    </div>
+  );
+}
 
 export default AdminPanel;

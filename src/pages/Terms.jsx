@@ -38,6 +38,9 @@ function Terms() {
             <p style={styles.text}>
               Matembo Prompts is a free online library of AI image and video generation prompts. Users can browse, copy, and use prompts for their own creative projects. The service is provided &quot;as is&quot; without warranties of any kind.
             </p>
+            <p style={styles.text}>
+              An account is optional. You can browse and copy prompts without signing in. If you create an account (email/password or Google), you can like and bookmark prompts, and those interactions sync to your profile so they follow you across devices. Public prompts and their metadata are shown to all visitors regardless of whether you have an account.
+            </p>
           </div>
 
           <div style={styles.section}>
@@ -86,14 +89,24 @@ function Terms() {
           </div>
 
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>9. Governing Law</h2>
+            <h2 style={styles.sectionTitle}>9. Accounts and Optional Sign-In</h2>
+            <p style={styles.text}>
+              Creating an account is entirely optional. When you sign in, you agree to provide accurate information and to keep your sign-in credentials secure. You are responsible for activity that happens under your account.
+            </p>
+            <p style={styles.text}>
+              Your account stores profile information and syncs your likes and bookmarks across devices. We may suspend or remove accounts that misuse the service or violate these Terms. You can request deletion of your account and associated data at any time by contacting us.
+            </p>
+          </div>
+
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>10. Governing Law</h2>
             <p style={styles.text}>
               These terms are governed by the laws of Tanzania. Any disputes arising under these terms shall be resolved in the courts of Tanzania.
             </p>
           </div>
 
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>10. Contact</h2>
+            <h2 style={styles.sectionTitle}>11. Contact</h2>
             <p style={styles.text}>
               For questions about these Terms of Service, contact us at{' '}
               <a href="mailto:ibrahimmaulid551@gmail.com" style={styles.link}>ibrahimmaulid551@gmail.com</a>
