@@ -69,19 +69,16 @@ const componentCSS = `
 
 .browse-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   max-width: 1340px;
   margin: 0 auto;
   padding: 0 20px;
 }
-@media (max-width: 1024px) {
-  .browse-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (max-width: 700px) {
+@media (max-width: 1023px) {
   .browse-grid { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 400px) {
+@media (max-width: 767px) {
   .browse-grid { grid-template-columns: 1fr; }
 }
 
