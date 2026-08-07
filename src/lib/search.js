@@ -5,11 +5,10 @@ import { normalizePrompt } from './prompts';
 
 // Lightweight columns for search result cards (avoids fetching heavy fields).
 const SEARCH_PROMPT_COLUMNS = `
-  id, slug, title, excerpt, image_url, category_id, author_id, subject_id,
+  id, slug, title, excerpt, image_url, category_id, author_id,
   trending_until, created_at,
   categories ( id, slug, name ),
-  profiles ( id, full_name ),
-  subjects ( id, slug, name )
+  profiles ( id, full_name )
 `;
 
 const TRENDING = 'trending';
@@ -29,13 +28,28 @@ function like(term) {
   return '%' + String(term).replace(/[%_\\]/g, (m) => '\\' + m) + '%';
 }
 
-// Search prompts across title, excerpt, description, image_prompt, video_prompt.
+// Search prompts across their own text fields PLUS the assigned category
+// (name/slug) and assigned tags. Uses ILIKE (fast via pg_trgm GIN indexes from
+// migrations 0016/0017). Results are ranked: direct text match first, then
+// category match, then tag match, each ordered newest-first.
 export async function searchPrompts(query, { limit = 6 } = {}) {
   const term = query.trim().toLowerCase();
-  if (!term) return { prompts: [], nextCategory: null };
+  if (!term) return [];
   const pattern = like(term);
 
-  let builder = supabase
+  const ranked = [];
+  const seen = new Set();
+  const addRows = (rows) => {
+    for (const row of rows || []) {
+      if (!seen.has(row.id)) {
+        seen.add(row.id);
+        ranked.push({ ...normalizePrompt(row), badge: promptBadge(row) });
+      }
+    }
+  };
+
+  // 1) Direct match on prompt text fields.
+  const textQuery = supabase
     .from('prompts')
     .select(SEARCH_PROMPT_COLUMNS)
     .or(
@@ -43,14 +57,59 @@ export async function searchPrompts(query, { limit = 6 } = {}) {
       `image_prompt.ilike.${pattern},video_prompt.ilike.${pattern}`
     )
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(15);
 
-  const { data, error } = await builder;
-  if (error) throw error;
-  return (data || []).map((row) => ({ ...normalizePrompt(row), badge: promptBadge(row) }));
+  // 2) Match on the assigned category's name or slug.
+  const catRes = await supabase
+    .from('categories')
+    .select('id')
+    .eq('is_active', true)
+    .or(`name.ilike.${pattern},slug.ilike.${pattern}`);
+  const catIds = (catRes.data || []).map((c) => c.id);
+
+  // 3) Match on any assigned tag's name.
+  const tagRes = await supabase.from('tags').select('id').ilike('name', pattern);
+  const tagIds = (tagRes.data || []).map((t) => t.id);
+  let tagPromptIds = [];
+  if (tagIds.length) {
+    const linkRes = await supabase
+      .from('prompt_tags')
+      .select('prompt_id')
+      .in('tag_id', tagIds);
+    tagPromptIds = (linkRes.data || []).map((r) => r.prompt_id);
+  }
+
+  const categoryQuery = catIds.length
+    ? supabase
+        .from('prompts')
+        .select(SEARCH_PROMPT_COLUMNS)
+        .in('category_id', catIds)
+        .order('created_at', { ascending: false })
+        .limit(12)
+    : null;
+  const tagQuery = tagPromptIds.length
+    ? supabase
+        .from('prompts')
+        .select(SEARCH_PROMPT_COLUMNS)
+        .in('id', tagPromptIds)
+        .order('created_at', { ascending: false })
+        .limit(12)
+    : null;
+
+  const [textRows, catRows, tagRows] = await Promise.all([
+    textQuery.then((r) => r.data || []).catch(() => []),
+    categoryQuery ? categoryQuery.then((r) => r.data || []).catch(() => []) : [],
+    tagQuery ? tagQuery.then((r) => r.data || []).catch(() => []) : [],
+  ]);
+
+  addRows(textRows);
+  addRows(catRows);
+  addRows(tagRows);
+
+  return ranked.slice(0, limit);
 }
 
-// Search categories by display name. Returns rows that link to /category/:slug.
+// Search categories by display name or slug. Only active categories appear.
 export async function searchCategories(query, { limit = 4 } = {}) {
   const term = query.trim().toLowerCase();
   if (!term) return [];
@@ -59,7 +118,8 @@ export async function searchCategories(query, { limit = 4 } = {}) {
   const { data, error } = await supabase
     .from('categories')
     .select('id, slug, name')
-    .ilike('name', pattern)
+    .eq('is_active', true)
+    .or(`name.ilike.${pattern},slug.ilike.${pattern}`)
     .order('name', { ascending: true })
     .limit(limit);
   if (error) throw error;

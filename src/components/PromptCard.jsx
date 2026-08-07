@@ -78,8 +78,8 @@ function PromptCard({ prompt }) {
     >
       <style>{btnCSS}</style>
 
-      {/* ── Image + badges ── */}
-      <div style={styles.imageWrapper}>
+      {/* ── Full-card image background ── */}
+      <div style={styles.backdrop}>
         {imgError ? (
           <div style={styles.placeholder}>
             <IconBrokenImage />
@@ -89,30 +89,37 @@ function PromptCard({ prompt }) {
             src={prompt.image_url}
             alt={prompt.image_prompt?.slice(0, 80) || 'AI prompt visual'}
             loading="lazy"
-            style={styles.image}
+            style={{ ...styles.image, transform: hovered ? 'scale(1.05)' : 'scale(1)' }}
             onError={() => setImgError(true)}
           />
         )}
-        {/* Category badge + New/Trending pinned to the top-left of the image */}
-        {(prompt?.category || showNew || showTrending) && (
-          <div style={styles.badgeCol}>
-            {prompt?.category && <CategoryBadge category={prompt.category} size="sm" />}
-            {(showNew || showTrending) && (
-              <div style={styles.badgeRow}>
-                {showNew && <NewBadge />}
-                {showTrending && <TrendingBadge />}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Like control pinned to the top-right of the image */}
-        <div style={styles.likeOverlay}>
-          <LikeButton promptId={prompt.id} count={prompt.like_count} size={16} overlay />
-        </div>
       </div>
 
-      {/* ── Body ── */}
+      {/* Status + category badges pinned top-left */}
+      {(prompt?.category || showNew || showTrending) && (
+        <div style={styles.badgeCol}>
+          {prompt?.category && (
+            <CategoryBadge
+              category={prompt.category}
+              size="sm"
+              style={styles.categoryBlack}
+            />
+          )}
+          {(showNew || showTrending) && (
+            <div style={styles.badgeRow}>
+              {showNew && <NewBadge />}
+              {showTrending && <TrendingBadge />}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Like control pinned top-right */}
+      <div style={styles.likeOverlay}>
+        <LikeButton promptId={prompt.id} count={prompt.like_count} size={16} overlay />
+      </div>
+
+      {/* ── Bottom overlay content on top of the image ── */}
       <div style={styles.body}>
         {prompt?.title && <h3 style={styles.cardTitle}>{prompt.title}</h3>}
 
@@ -120,19 +127,16 @@ function PromptCard({ prompt }) {
           excerpt={prompt.excerpt}
           imagePrompt={prompt.image_prompt}
           videoPrompt={prompt.video_prompt}
-          maxLength={150}
-          lines={3}
-          style={{ marginBottom: '14px' }}
+          maxLength={130}
+          lines={2}
+          style={{
+            marginBottom: '10px',
+            color: 'rgba(255,255,255,0.9)',
+            fontSize: 13.5,
+            textShadow: '0 1px 3px rgba(0,0,0,0.5)',
+          }}
         />
 
-        {/* ── Meta row: date ── */}
-        <div style={styles.metaRow}>
-          {prompt?.created_at && (
-            <span style={styles.date}>{timeAgo(prompt.created_at)}</span>
-          )}
-        </div>
-
-        {/* ── Actions ── */}
         {(hasImagePrompt || hasVideoPrompt) && (
           <div style={styles.actionsRow}>
             {hasImagePrompt && (
@@ -144,8 +148,7 @@ function PromptCard({ prompt }) {
                   ...(copiedImage ? styles.btnImageCopied : styles.btnImageDefault),
                 }}
               >
-                <IconPhoto size={14} color={copiedImage ? '#ffffff' : '#0a6b5e'} />
-                <span>{copiedImage ? 'Copied! ✓' : 'Copy Prompt'}</span>
+                <span>{copiedImage ? 'Copied ✓' : 'Copy Prompt'}</span>
               </button>
             )}
 
@@ -158,8 +161,7 @@ function PromptCard({ prompt }) {
                   ...(copiedVideo ? styles.btnVideoCopied : styles.btnVideoDefault),
                 }}
               >
-                <IconVideo size={14} color="#ffffff" />
-                <span>{copiedVideo ? 'Copied! ✓' : 'Copy Prompt'}</span>
+                <span>{copiedVideo ? 'Copied ✓' : 'Copy Prompt'}</span>
               </button>
             )}
 
@@ -177,9 +179,11 @@ function PromptCard({ prompt }) {
           </div>
         )}
 
-        {/* ── Author at the end of the card ── */}
-        <div style={styles.authorFooter}>
-          by {resolveAuthorName(prompt.author, DEFAULT_AUTHOR)}
+        <div style={styles.footerRow}>
+          <span style={styles.author}>
+            by {resolveAuthorName(prompt.author, DEFAULT_AUTHOR)}
+          </span>
+          {prompt?.created_at && <span style={styles.date}>{timeAgo(prompt.created_at)}</span>}
         </div>
       </div>
     </article>
@@ -192,46 +196,49 @@ function PromptCard({ prompt }) {
 const styles = {
   card: {
     borderRadius: '16px',
-    background: '#ffffff',
+    background: '#0d0d0d',
     overflow: 'hidden',
+    position: 'relative',
+    aspectRatio: '4 / 5',
+    clipPath: 'none',
     transition: 'transform 0.3s ease, box-shadow 0.3s ease',
     boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
     cursor: 'pointer',
     outline: 'none',
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
   },
   cardHover: {
     transform: 'translateY(-4px)',
-    boxShadow: '0 8px 28px rgba(0,0,0,0.10)',
+    boxShadow: '0 8px 28px rgba(0,0,0,0.14)',
   },
 
-  /* Image */
-  imageWrapper: {
-    width: '100%',
-    aspectRatio: '4 / 3',
-    maxHeight: '360px',
+  /* Full-card image background */
+  backdrop: {
+    position: 'absolute',
+    inset: 0,
     overflow: 'hidden',
-    borderRadius: '16px 16px 0 0',
-    background: '#f3f4f6',
-    position: 'relative',
+    background: '#0d0d0d',
+    borderRadius: '16px',
   },
   image: {
+    position: 'absolute',
+    inset: 0,
     width: '100%',
     height: '100%',
     objectFit: 'cover',
-    objectPosition: 'top',
+    objectPosition: 'center',
     display: 'block',
+    transition: 'transform 0.4s ease',
   },
   placeholder: {
-    width: '100%',
-    height: '100%',
+    position: 'absolute',
+    inset: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: '#f3f4f6',
+    background: '#111827',
   },
+
+  /* Pinned corners (floating above the card — no opaque background) */
   badgeCol: {
     position: 'absolute',
     top: '12px',
@@ -240,8 +247,13 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'flex-start',
     gap: '6px',
-    zIndex: 2,
+    zIndex: 3,
     pointerEvents: 'none',
+  },
+  categoryBlack: {
+    background: '#0a0a0a',
+    color: '#ffffff',
+    border: '1px solid rgba(255,255,255,0.25)',
   },
   badgeRow: {
     display: 'flex',
@@ -252,65 +264,42 @@ const styles = {
     position: 'absolute',
     top: '12px',
     right: '12px',
-    zIndex: 2,
+    zIndex: 3,
   },
 
-  /* Body */
+  /* Bottom content overlay — translucent black so the image shows through */
   body: {
-    padding: '16px 20px 18px',
-    borderLeft: '0.5px solid #e5e7eb',
-    borderRight: '0.5px solid #e5e7eb',
-    borderBottom: '0.5px solid #e5e7eb',
-    borderRadius: '0 0 16px 16px',
-    background: '#ffffff',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     display: 'flex',
     flexDirection: 'column',
-    flex: 1,
+    padding: '22px 18px 14px',
+    zIndex: 2,
+    color: '#ffffff',
+    borderRadius: '18px 18px 0 0',
+    background:
+      'linear-gradient(to top, rgba(0,0,0,0.96) 0%, rgba(0,0,0,0.82) 45%, rgba(0,0,0,0.45) 100%)',
+    backdropFilter: 'blur(1.5px)',
   },
   cardTitle: {
-    fontSize: '16px',
+    fontSize: '19px',
     fontWeight: 700,
-    color: '#0d0d0d',
-    margin: '0 0 8px 0',
+    color: '#ffffff',
+    margin: '0 0 6px 0',
     fontFamily: "'DM Sans', sans-serif",
-    whiteSpace: 'nowrap',
+    textShadow: '0 1px 4px rgba(0,0,0,0.6)',
     overflow: 'hidden',
-    textOverflow: 'ellipsis',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 2,
   },
-
-  /* Meta row */
-  metaRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: '8px',
-    marginBottom: '10px',
-  },
-  date: {
-    fontSize: '12px',
-    color: '#9ca3af',
-    fontWeight: 500,
-    fontFamily: "'DM Sans', sans-serif",
-    whiteSpace: 'nowrap',
-  },
-  authorFooter: {
-    marginTop: '14px',
-    paddingTop: '10px',
-    borderTop: '1px solid #f3f4f6',
-    fontSize: '12px',
-    color: '#9ca3af',
-    fontWeight: 500,
-    fontFamily: "'DM Sans', sans-serif",
-    textTransform: 'lowercase',
-  },
-
-  /* Actions */
   actionsRow: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     flexWrap: 'wrap',
-    marginTop: 'auto',
   },
   socialGroup: {
     display: 'inline-flex',
@@ -318,9 +307,37 @@ const styles = {
     gap: '4px',
     marginLeft: 'auto',
     flexShrink: 0,
+    background: 'rgba(255,255,255,0.92)',
+    borderRadius: '999px',
+    padding: '2px 6px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+  },
+  footerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    marginTop: '10px',
+  },
+  author: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: 500,
+    fontFamily: "'DM Sans', sans-serif",
+    textTransform: 'lowercase',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  date: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: 500,
+    fontFamily: "'DM Sans', sans-serif",
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
 
-  /* Buttons */
   btnBase: {
     minWidth: 0,
     display: 'inline-flex',
@@ -337,9 +354,9 @@ const styles = {
     whiteSpace: 'nowrap',
   },
   btnImageDefault: {
-    background: 'transparent',
+    background: 'rgba(255,255,255,0.94)',
     color: '#0a6b5e',
-    border: '1.5px solid #0a6b5e',
+    border: '1.5px solid rgba(255,255,255,0.94)',
   },
   btnImageCopied: {
     background: '#0a6b5e',
@@ -352,9 +369,9 @@ const styles = {
     border: '1.5px solid #0a6b5e',
   },
   btnVideoCopied: {
-    background: '#085048',
-    color: '#ffffff',
-    border: '1.5px solid #085048',
+    background: 'rgba(255,255,255,0.94)',
+    color: '#0a6b5e',
+    border: '1.5px solid #0a6b5e',
   },
 };
 

@@ -5,38 +5,39 @@ import { PROMPTS_PER_PAGE } from './config';
 
 const PROMPT_LIST_COLUMNS = `
   id, slug, title, excerpt, image_url, image_prompt, video_prompt,
-  category_id, author_id, subject_id,
+  category_id, author_id,
   like_count, save_count, share_count, view_count, trending_until, created_at,
   categories ( id, slug, name, parent_id, parent: parent_id ( id, slug, name ) ),
-  profiles ( id, full_name, avatar_url ),
-  subjects ( id, slug, name )
+  prompt_tags ( tag: tags ( id, slug, name ) ),
+  profiles ( id, full_name, avatar_url )
 `;
 
-// Normalize a raw joined row into the shape components consume.
+// Normalize a raw row into the shape components consume.
 export function normalizePrompt(raw = {}) {
   const category = Array.isArray(raw.categories) ? raw.categories[0] : raw.categories;
   const author = Array.isArray(raw.profiles) ? raw.profiles[0] : raw.profiles;
-  const subject = Array.isArray(raw.subjects) ? raw.subjects[0] : raw.subjects;
+  const tagRows = Array.isArray(raw.prompt_tags) ? raw.prompt_tags : [];
+  const tags = tagRows
+    .map((row) => (Array.isArray(row.tags) ? row.tags[0] : row.tags))
+    .filter(Boolean);
   return {
     ...raw,
     category: category || null,
     author: author || null,
-    subject: subject || null,
+    tags,
     category_id: raw.category_id,
     author_id: raw.author_id,
-    subject_id: raw.subject_id,
   };
 }
 
-// Paginated list, optionally filtered by category and/or subject.
-export async function fetchPrompts({ page = 1, categoryId = null, subjectId = null, pageSize = PROMPTS_PER_PAGE } = {}) {
+// Paginated list, optionally filtered by category.
+export async function fetchPrompts({ page = 1, categoryId = null, pageSize = PROMPTS_PER_PAGE } = {}) {
   let query = supabase
     .from('prompts')
     .select(PROMPT_LIST_COLUMNS, { count: 'exact' })
     .order('created_at', { ascending: false });
 
   if (categoryId) query = query.eq('category_id', categoryId);
-  if (subjectId) query = query.eq('subject_id', subjectId);
 
   query = query.range((page - 1) * pageSize, page * pageSize - 1);
 

@@ -1,17 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { usePrompts } from '../hooks/usePrompts';
+import { fetchBrowseCategories } from '../lib/categories';
 import PromptCard from './PromptCard';
 import { IconWifiOff, IconGrid } from './icons';
-
-// Curated homepage filters. "subject" pills map to the subjects table,
-// "category" pills map to a category slug (e.g. business-posters).
-const HOME_FILTERS = [
-  { label: 'All' },
-  { label: 'Men', kind: 'subject', slug: 'men' },
-  { label: 'Women', kind: 'subject', slug: 'women' },
-  { label: 'Posters', kind: 'category', slug: 'business-posters' },
-];
 
 /* ══════════════════════════════════════════════
    SKELETON CARD
@@ -38,19 +30,24 @@ function SkeletonCard() {
    PROMPTS GRID COMPONENT
    ══════════════════════════════════════════════ */
 function PromptsGrid({ categorySlug = null }) {
-  const {
-    prompts,
-    loading,
-    error,
-    page,
-    totalCount,
-    totalPages,
-    activeCategorySlug,
-    activeSubjectSlug,
-    selectCategory,
-    selectSubject,
-    goToPage,
-  } = usePrompts({ pageSize: 10 });
+  const { prompts, loading, error, page, totalCount, totalPages, activeCategorySlug, selectCategory, goToPage } = usePrompts({ pageSize: 10 });
+
+  // Dynamic, DB-driven category filter pills (active top-level categories that
+  // currently have prompts). No hardcoded categories.
+  const [filterCategories, setFilterCategories] = useState([]);
+  useEffect(() => {
+    let active = true;
+    fetchBrowseCategories()
+      .then((rows) => {
+        if (!active) return;
+        const withPrompts = rows
+          .filter((c) => (Number(c.prompt_count) || 0) > 0)
+          .sort((a, b) => (b.prompt_count || 0) - (a.prompt_count || 0));
+        setFilterCategories(withPrompts.slice(0, 8));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   // Apply an externally requested category filter (e.g. from Browse by Style).
   useEffect(() => {
@@ -62,7 +59,7 @@ function PromptsGrid({ categorySlug = null }) {
 
   /* ─── Realtime: only on the unfiltered first page ─── */
   useEffect(() => {
-    if (needsPagination || activeCategorySlug || activeSubjectSlug || page !== 1) return;
+    if (needsPagination || activeCategorySlug || page !== 1) return;
 
     const channel = supabase
       .channel('prompts-realtime')
@@ -78,7 +75,7 @@ function PromptsGrid({ categorySlug = null }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [needsPagination, activeCategorySlug, activeSubjectSlug, page]);
+  }, [needsPagination, activeCategorySlug, page]);
 
   const goToPageAndScroll = (next) => {
     goToPage(next);
@@ -111,27 +108,23 @@ function PromptsGrid({ categorySlug = null }) {
           <div style={styles.headerDivider} />
         </div>
 
-        {/* ── Filters: Men / Women / Posters ── */}
+        {/* ── Filters: dynamic, DB-driven categories ── */}
         {!loading && (
           <div style={styles.filterRow} role="group" aria-label="Filter prompts">
-            {HOME_FILTERS.map((f) => {
+            <FilterPill
+              label="All"
+              active={!activeCategorySlug}
+              onClick={() => selectCategory(null)}
+            />
+            {filterCategories.map((c) => {
               const catSlug = String(activeCategorySlug || '').toLowerCase();
-              const subSlug = String(activeSubjectSlug || '').toLowerCase();
-              const active = !f.kind
-                ? !activeCategorySlug && !activeSubjectSlug
-                : f.kind === 'subject'
-                  ? !activeCategorySlug && subSlug === f.slug
-                  : !activeSubjectSlug && catSlug === f.slug;
+              const active = catSlug === String(c.slug).toLowerCase();
               return (
                 <FilterPill
-                  key={f.label}
-                  label={f.label}
+                  key={c.id}
+                  label={c.name}
                   active={active}
-                  onClick={() => {
-                    if (!f.kind) { selectCategory(null); selectSubject(null); return; }
-                    if (f.kind === 'subject') { selectCategory(null); selectSubject(f.slug); return; }
-                    selectSubject(null); selectCategory(f.slug);
-                  }}
+                  onClick={() => selectCategory(c.slug)}
                 />
               );
             })}
@@ -164,7 +157,7 @@ function PromptsGrid({ categorySlug = null }) {
             <IconGrid />
             <p style={styles.stateTitle}>No prompts here yet.</p>
             <p style={styles.stateSubtitle}>
-              {(activeCategorySlug || activeSubjectSlug) ? 'Try another filter or check back soon.' : 'Prompts will appear here once added.'}
+              {(activeCategorySlug) ? 'Try another filter or check back soon.' : 'Prompts will appear here once added.'}
             </p>
           </div>
         )}

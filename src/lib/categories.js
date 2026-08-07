@@ -10,7 +10,7 @@ export function fetchCategories(force = false) {
   if (inflight) return inflight;
   inflight = supabase
     .from('categories')
-    .select('id, slug, name, sort_order, parent_id')
+    .select('id, slug, name, description, is_active, sort_order, parent_id')
     .order('sort_order', { ascending: true })
     .then(({ data, error }) => {
       inflight = null;
@@ -45,7 +45,7 @@ export const getSubcategories = (list, parentId) =>
 export async function fetchCategoryStats() {
   const { data, error } = await supabase
     .from('category_stats')
-    .select('id, slug, name, parent_id, sort_order, prompt_count');
+    .select('id, slug, name, description, is_active, parent_id, sort_order, prompt_count');
   if (!error && data) return data;
 
   // Fallback: count prompts per category client-side.
@@ -56,4 +56,12 @@ export async function fetchCategoryStats() {
     if (p.category_id) counts[p.category_id] = (counts[p.category_id] || 0) + 1;
   });
   return cats.map((c) => ({ ...c, prompt_count: counts[c.id] || 0 }));
+}
+
+// Dynamic top-level categories for homepage / browse / filter surfaces.
+// Only active categories are shown to visitors; deactivation removes them
+// from these lists without deleting data.
+export async function fetchBrowseCategories() {
+  const list = await fetchCategoryStats();
+  return getRootCategories(list).filter((c) => c.is_active !== false);
 }

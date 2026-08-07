@@ -394,6 +394,13 @@ function PromptDetail() {
               )}
               <h1 style={styles.detailTitle}>{prompt.title || 'AI Prompt'}</h1>
               {prompt.description && <p style={styles.detailDesc}>{prompt.description}</p>}
+              {Array.isArray(prompt.tags) && prompt.tags.length > 0 && (
+                <div style={styles.tagsRow}>
+                  {prompt.tags.map((t) => (
+                    <span key={t.id} style={styles.tagChip}>#{t.name}</span>
+                  ))}
+                </div>
+              )}
 
               {/* Date */}
               <div style={styles.detailMetaRow}>
@@ -685,6 +692,22 @@ const styles = {
     color: '#4b5563',
     lineHeight: '1.6',
     margin: '0',
+  },
+  tagsRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+    marginTop: '14px',
+  },
+  tagChip: {
+    background: '#f3f4f6',
+    color: '#4b5563',
+    border: '1px solid #e5e7eb',
+    borderRadius: '999px',
+    padding: '5px 12px',
+    fontSize: '12px',
+    fontWeight: 600,
+    fontFamily: "'DM Sans', sans-serif",
   },
 
   /* Prompt blocks */

@@ -12,6 +12,7 @@ function BrowseByStyle() {
       .then((list) => {
         if (!active) return;
         const roots = getRootCategories(list)
+          .filter((c) => c.is_active !== false)
           .map((c) => ({ ...c, prompt_count: Number(c.prompt_count) || 0 }))
           .sort((a, b) => b.prompt_count - a.prompt_count);
         setItems(roots);

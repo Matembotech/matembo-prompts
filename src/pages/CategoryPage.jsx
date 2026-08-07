@@ -86,7 +86,6 @@ function CategoryPage() {
           </svg>
           Back to Prompts
         </Link>
-        <span style={styles.headerLabel}>PROMPT LIBRARY</span>
         <h2 style={styles.heading}>{notFound ? 'Style Not Found' : (category?.name || 'Loading…')}</h2>
         <p style={styles.subtitle}>
           {notFound
@@ -179,7 +178,7 @@ const styles = {
   },
   header: {
     textAlign: 'center',
-    padding: '0 0 48px',
+    padding: '72px 0 48px',
     maxWidth: '1340px',
     margin: '0 auto',
     position: 'relative',
@@ -195,16 +194,6 @@ const styles = {
     position: 'absolute',
     left: '20px',
     top: '8px',
-  },
-  headerLabel: {
-    display: 'block',
-    fontSize: '13px',
-    fontWeight: 700,
-    color: '#0a6b5e',
-    letterSpacing: '2px',
-    textTransform: 'uppercase',
-    marginBottom: '12px',
-    fontFamily: "'DM Sans', sans-serif",
   },
   heading: {
     fontSize: '40px',

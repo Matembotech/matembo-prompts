@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { cloudinaryConfig } from '../cloudinaryConfig';
 import { fetchCategories, getRootCategories, getSubcategories, getCategoryById } from '../lib/categories';
-import { fetchSubjects } from '../lib/subjects';
+import { fetchTags, getPromptTags, savePromptTags, parseTagNames, slugifyTag } from '../lib/tags';
 import { useAuth } from '../context/AuthContext';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import StatsRow from './admin/StatsRow';
@@ -28,7 +28,7 @@ function AdminPanel() {
   const [excerpt, setExcerpt] = useState('');
   const [libraryId, setLibraryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
-  const [subjectId, setSubjectId] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
   const [imagePromptFocused, setImagePromptFocused] = useState(false);
   const [videoPromptFocused, setVideoPromptFocused] = useState(false);
   const [formError, setFormError] = useState('');
@@ -95,7 +95,7 @@ function AdminPanel() {
   const [editExcerpt, setEditExcerpt] = useState('');
   const [editLibraryId, setEditLibraryId] = useState('');
   const [editSubcategoryId, setEditSubcategoryId] = useState('');
-  const [editSubjectId, setEditSubjectId] = useState('');
+  const [editTagsInput, setEditTagsInput] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const editFileInputRef = useRef(null);
 
@@ -145,14 +145,6 @@ function AdminPanel() {
     fetchCategories(true).then(setCategories).catch(() => {});
   }, [isAdmin]);
 
-  // ─── Subjects for dropdowns ───
-  const [subjects, setSubjects] = useState([]);
-  useEffect(() => {
-    if (!isAdmin) return;
-    fetchSubjects(true).then(setSubjects).catch(() => {});
-  }, [isAdmin]);
-
-  // ─── Contact messages ───
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageFilter, setMessageFilter] = useState('');
@@ -253,25 +245,31 @@ function AdminPanel() {
         : await uploadToCloudinary(imageUrl.trim());
 
       // 2. Save to Supabase
-      const { error } = await supabase.from('prompts').insert([
-        {
-          title: title.trim() || null,
-          slug: slug.trim() || null,
-          description: description.trim() || null,
-          excerpt: excerpt.trim() || null,
-          category_id: resolvedCategoryId || null,
-          subject_id: subjectId || null,
-          image_url: finalImageUrl,
-          image_prompt: imagePrompt.trim() || null,
-          video_prompt: videoPrompt.trim() || null,
-          copy_count: 0,
-        },
-      ]);
+      const { data: inserted, error } = await supabase
+        .from('prompts')
+        .insert([
+          {
+            title: title.trim() || null,
+            slug: slug.trim() || null,
+            description: description.trim() || null,
+            excerpt: excerpt.trim() || null,
+            category_id: resolvedCategoryId || null,
+            image_url: finalImageUrl,
+            image_prompt: imagePrompt.trim() || null,
+            video_prompt: videoPrompt.trim() || null,
+            copy_count: 0,
+          },
+        ])
+        .select()
+        .single();
 
       if (error) {
         if (error.code === '23505') throw new Error('Slug must be unique. Please change the slug.');
         throw error;
       }
+
+      // 3. Attach tags (dynamically created/management via the tags table).
+      await savePromptTags(inserted?.id, parseTagNames(tagsInput));
 
       showToast('Prompt saved successfully!', 'success');
       // Reset form
@@ -284,9 +282,9 @@ function AdminPanel() {
       setImageSource('file');
       setImagePrompt('');
       setVideoPrompt('');
-      setLibraryId('');
+setLibraryId('');
       setSubcategoryId('');
-      setSubjectId('');
+      setTagsInput('');
       setExcerpt('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchPrompts(); // Refresh grid
@@ -355,7 +353,7 @@ function AdminPanel() {
     }
   };
 
-  // Quick-assign category / subject straight from the manage grid.
+  // Quick-assign category straight from the manage grid.
   const quickAssign = async (id, patch) => {
     try {
       const { error } = await supabase.from('prompts').update(patch).eq('id', id);
@@ -387,7 +385,6 @@ function AdminPanel() {
     setEditDescription(prompt.description || '');
     setEditLibraryId(libId);
     setEditSubcategoryId(subId);
-    setEditSubjectId(prompt.subject_id || '');
     setEditExcerpt(prompt.excerpt || '');
     setEditImagePreview(prompt.image_url);
     setEditImageUrl(prompt.image_url || '');
@@ -397,6 +394,14 @@ function AdminPanel() {
     setEditVideoPrompt(prompt.video_prompt || '');
     setEditModalOpen(true);
     document.body.style.overflow = 'hidden';
+
+    // Load the prompt's existing tags for editing.
+    getPromptTags(prompt.id)
+      .then((tags) => {
+        if (!tags) return;
+        setEditTagsInput(tags.map((t) => t.name).join(', '));
+      })
+      .catch(() => {});
   };
 
   const closeEditModal = () => {
@@ -438,7 +443,6 @@ function AdminPanel() {
           description: editDescription.trim() || null,
           excerpt: editExcerpt.trim() || null,
           category_id: resolvedEditCategoryId || null,
-          subject_id: editSubjectId || null,
           image_url: finalImageUrl,
           image_prompt: editImagePrompt.trim() || null,
           video_prompt: editVideoPrompt.trim() || null,
@@ -449,6 +453,9 @@ function AdminPanel() {
         if (error.code === '23505') throw new Error('Slug must be unique. Please change the slug.');
         throw error;
       }
+
+      // Replace the prompt's tag set.
+      await savePromptTags(editingPromptId, parseTagNames(editTagsInput));
 
       showToast('Prompt updated successfully', 'success');
       closeEditModal();
@@ -795,17 +802,17 @@ function AdminPanel() {
                 </div>
 
                 <div style={styles.fieldGroup}>
-                  <label style={styles.label}>Subject (Men / Women / Children / Unisex)</label>
-                  <select
-                    value={subjectId}
-                    onChange={(e) => setSubjectId(e.target.value)}
+                  <label style={styles.label}>Tags (comma-separated, optional)</label>
+                  <input
+                    type="text"
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    placeholder="e.g. Luxury, Minimalist, 3D, Realistic"
                     style={styles.urlInput}
-                  >
-                    <option value="">No subject</option>
-                    {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                  />
+                  <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>
+                    Tags are searchable attributes (style, subject, technique). Combined with the category (what you&apos;re creating).
+                  </p>
                 </div>
 
                 <div style={styles.fieldGroup}>
@@ -1030,7 +1037,7 @@ function AdminPanel() {
                           </div>
                         </div>
 
-                        {/* ── Quick assign category / subject ── */}
+                        {/* ── Quick-assign category ── */}
                         <div style={styles.quickAssignRow}>
                           <select
                             value={p.category_id || ''}
@@ -1041,17 +1048,6 @@ function AdminPanel() {
                             <option value="">No category</option>
                             {categories.map((c) => (
                               <option key={c.id} value={c.id}>{c.parent_id ? `— ${c.name}` : c.name}</option>
-                            ))}
-                          </select>
-                          <select
-                            value={p.subject_id || ''}
-                            onChange={(e) => quickAssign(p.id, { subject_id: e.target.value || null })}
-                            style={styles.quickSelect}
-                            title="Assign subject"
-                          >
-                            <option value="">No subject</option>
-                            {subjects.map((s) => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
                           </select>
                         </div>
@@ -1159,11 +1155,14 @@ function AdminPanel() {
           )}
 
           {activePage === 'settings' && (
-            <CategoriesManager
-              categories={categories}
-              onChanged={(next) => setCategories(next)}
-              showToast={showToast}
-            />
+            <>
+              <CategoriesManager
+                categories={categories}
+                onChanged={(next) => setCategories(next)}
+                showToast={showToast}
+              />
+              <TagsManager showToast={showToast} />
+            </>
           )}
         </main>
       </div>
@@ -1250,17 +1249,17 @@ function AdminPanel() {
               </div>
 
               <div style={styles.fieldGroup}>
-                <label style={styles.label}>Subject (Men / Women / Children / Unisex)</label>
-                <select
-                  value={editSubjectId}
-                  onChange={(e) => setEditSubjectId(e.target.value)}
+                <label style={styles.label}>Tags (comma-separated, optional)</label>
+                <input
+                  type="text"
+                  value={editTagsInput}
+                  onChange={(e) => setEditTagsInput(e.target.value)}
+                  placeholder="e.g. Luxury, Minimalist, 3D, Realistic"
                   style={styles.urlInput}
-                >
-                  <option value="">No subject</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                />
+                <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>
+                  Tags are searchable attributes (style, subject, technique).
+                </p>
               </div>
 
               <div style={styles.fieldGroup}>
@@ -1671,14 +1670,30 @@ function CategoriesManager({ categories, onChanged, showToast }) {
   const [slug, setSlug] = useState('');
   const [sortOrder, setSortOrder] = useState(0);
   const [parentId, setParentId] = useState('');
+  const [description, setDescription] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [editingId, setEditingId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
   const rootCategories = getRootCategories(categories);
+  const sorted = [...(categories || [])].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
-  const handleAdd = async (e) => {
+  const resetForm = () => {
+    setName(''); setSlug(''); setSortOrder(0); setParentId(''); setDescription(''); setIsActive(true); setEditingId(null); setError('');
+  };
+
+  const startEdit = (c) => {
+    setEditingId(c.id);
+    setName(c.name); setSlug(c.slug || ''); setSortOrder(c.sort_order || 0);
+    setParentId(c.parent_id ? String(c.parent_id) : '');
+    setDescription(c.description || ''); setIsActive(c.is_active !== false);
+    setError('');
+  };
+
+  const handleSave = async (e) => {
     e.preventDefault();
     setError('');
     if (!name.trim()) {
@@ -1687,58 +1702,73 @@ function CategoriesManager({ categories, onChanged, showToast }) {
     }
     setBusy(true);
     try {
-      const { data, error: err } = await supabase
-        .from('categories')
-        .insert({
-          name: name.trim(),
-          slug: slug.trim() || slugify(name),
-          sort_order: Number(sortOrder) || 0,
-          parent_id: parentId || null,
-        })
-        .select()
-        .single();
-      if (err) {
-        setError(err.message || 'Failed to add category.');
-        return;
+      const payload = {
+        name: name.trim(),
+        slug: slug.trim() || slugify(name),
+        sort_order: Number(sortOrder) || 0,
+        parent_id: parentId || null,
+        description: description.trim() || null,
+        is_active: isActive,
+      };
+      if (editingId) {
+        const { error: err } = await supabase.from('categories').update(payload).eq('id', editingId);
+        if (err) { setError(err.message || 'Failed to update category.'); return; }
+        onChanged((categories || []).map((c) => (String(c.id) === String(editingId) ? { ...c, ...payload, id: c.id } : c)));
+        showToast('Category updated', 'success');
+      } else {
+        const { data, error: err } = await supabase.from('categories').insert(payload).select().single();
+        if (err) { setError(err.message || 'Failed to add category.'); return; }
+        onChanged([...(categories || []), data].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
+        showToast('Category added', 'success');
       }
-      onChanged([...(categories || []), data].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
-      showToast('Category added', 'success');
-      setName('');
-      setSlug('');
-      setSortOrder(0);
-      setParentId('');
+      resetForm();
     } catch (err) {
-      setError(err.message || 'Failed to add category.');
+      setError(err.message || 'Failed to save category.');
     } finally {
       setBusy(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    const { error: err } = await supabase.from('categories').delete().eq('id', id);
+  const handleToggleActive = async (c) => {
+    const next = c.is_active !== false ? false : true;
+    const { error: err } = await supabase.from('categories').update({ is_active: next }).eq('id', c.id);
+    if (err) { showToast(err.message || 'Failed to update category', 'error'); return; }
+    onChanged((categories || []).map((x) => (String(x.id) === String(c.id) ? { ...x, is_active: next } : x)));
+    showToast(next ? 'Category activated' : 'Category deactivated', 'success');
+  };
+
+  const handleDelete = async (c) => {
+    const promptCount = c.prompt_count || 0;
+    if (promptCount > 0) {
+      showToast('Cannot delete: this category still has prompts. Move or delete them first.', 'error');
+      return;
+    }
+    const { error: err } = await supabase.from('categories').delete().eq('id', c.id);
     if (err) {
       showToast(err.message || 'Failed to delete category', 'error');
       return;
     }
-    onChanged((categories || []).filter((c) => c.id !== id));
+    onChanged((categories || []).filter((x) => String(x.id) !== String(c.id)));
+    if (String(editingId) === String(c.id)) resetForm();
     showToast('Category deleted', 'success');
   };
 
   const fieldStyle = { flex: 1, minWidth: 0, padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '14px', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' };
+  const smallBtn = { background: 'transparent', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', color: '#374151' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div>
         <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#0d0d0d', margin: '0 0 4px 0', fontFamily: "'Syne', sans-serif", marginTop: 0 }}>Manage Categories</h3>
-        <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>Categories drive the filter pills on the homepage.</p>
+        <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>Categories drive the homepage filters, Browse by Style, category pages and search. Add / edit / deactivate any category — deactivated categories are hidden from visitors but keep their prompts.</p>
       </div>
 
       {error && <p style={{ color: '#dc2626', fontSize: '14px' }}>{error}</p>}
 
-      {/* Add form */}
-      <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '20px' }}>
+      {/* Add / edit form */}
+      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '20px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Category name (e.g. Cinematic)" style={fieldStyle} />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Category name (e.g. Birthday Designs)" style={fieldStyle} />
           <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="slug (auto if blank)" style={fieldStyle} />
           <input value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} type="number" placeholder="Order" style={{ ...fieldStyle, maxWidth: '90px' }} />
           <select value={parentId} onChange={(e) => setParentId(e.target.value)} style={{ ...fieldStyle, maxWidth: '220px' }}>
@@ -1748,32 +1778,143 @@ function CategoriesManager({ categories, onChanged, showToast }) {
             ))}
           </select>
         </div>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Category description (shown on the category page, optional)"
+          style={{ ...fieldStyle, height: '70px', resize: 'vertical' }}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#374151', fontWeight: 600 }}>
+            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+            Active (visible to visitors)
+          </label>
+        </div>
         <p style={{ fontSize: '12px', color: '#9ca3af', margin: 0 }}>Tip: leave Parent empty for a top-level library. Set a Parent to nest a format under it (e.g. Flyers under Business &amp; Professional).</p>
-        <button type="submit" disabled={busy} style={styles.submitBtn}>{busy ? 'Adding…' : 'Add Category'}</button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button type="submit" disabled={busy} style={{ ...styles.submitBtn, width: 'auto', minWidth: '160px', marginTop: 0 }}>{busy ? 'Saving…' : editingId ? 'Update Category' : 'Add Category'}</button>
+          {editingId && (
+            <button type="button" onClick={resetForm} style={smallBtn}>Cancel edit</button>
+          )}
+        </div>
       </form>
 
       {/* List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {(categories || []).map((c) => {
+        {sorted.map((c) => {
           const parent = getCategoryById(categories, c.parent_id);
+          const inactive = c.is_active === false;
           return (
-            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '12px 16px', marginLeft: c.parent_id ? '24px' : 0 }}>
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '12px 16px', marginLeft: c.parent_id ? '24px' : 0, opacity: inactive ? 0.6 : 1 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontWeight: 600, color: '#0d0d0d', fontSize: '14px' }}>{c.name}</span>
+                <span style={{ fontWeight: 600, color: '#0d0d0d', fontSize: '14px' }}>
+                  {c.name}
+                  {inactive && <span style={{ marginLeft: '8px', fontSize: '11px', background: '#f3f4f6', color: '#6b7280', borderRadius: '999px', padding: '2px 8px', fontWeight: 700 }}>INACTIVE</span>}
+                </span>
                 <span style={{ color: '#9ca3af', fontSize: '12px', marginLeft: '8px' }}>
                   {parent ? `under ${parent.name}` : 'library'}{' '}
                   / {c.slug}
+                  {(c.prompt_count || 0) > 0 && <span style={{ color: '#0a6b5e' }}> · {c.prompt_count} prompts</span>}
                 </span>
+                {c.description && <span style={{ display: 'block', fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>{c.description}</span>}
               </div>
-              <button type="button" onClick={() => handleDelete(c.id)} style={{ background: 'transparent', border: '1px solid #fee2e2', color: '#dc2626', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+              <button type="button" onClick={() => startEdit(c)} style={smallBtn}>Edit</button>
+              <button type="button" onClick={() => handleToggleActive(c)} style={smallBtn}>
+                {inactive ? 'Activate' : 'Deactivate'}
+              </button>
+              <button type="button" onClick={() => handleDelete(c)} style={{ background: 'transparent', border: '1px solid #fee2e2', color: '#dc2626', borderRadius: '8px', padding: '6px 12px', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
                 Delete
               </button>
             </div>
           );
         })}
-        {(!categories || categories.length === 0) && (
+        {sorted.length === 0 && (
           <p style={{ color: '#6b7280', fontSize: '14px' }}>No categories yet. Add your first one above.</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════
+   TAGS MANAGER
+   ════════════════════════════════════════════ */
+function TagsManager({ showToast }) {
+  const [tags, setTags] = useState([]);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    try {
+      setTags(await fetchTags(true));
+    } catch (err) {
+      setError(err.message || 'Failed to load tags');
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!name.trim()) { setError('Tag name is required.'); return; }
+    setBusy(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('tags')
+        .insert({ name: name.trim(), slug: slugifyTag(name) })
+        .select()
+        .single();
+      if (err) { setError(err.message || 'Failed to add tag.'); return; }
+      setTags((prev) => [...prev, data].sort((a, b) => String(a.name).localeCompare(String(b.name))));
+      setName('');
+      showToast('Tag added', 'success');
+    } catch (err) {
+      setError(err.message || 'Failed to add tag.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    const { error: err } = await supabase.from('tags').delete().eq('id', id);
+    if (err) { showToast(err.message || 'Failed to delete tag', 'error'); return; }
+    setTags((prev) => prev.filter((t) => String(t.id) !== String(id)));
+    showToast('Tag deleted', 'success');
+  };
+
+  const fieldStyle = { flex: 1, minWidth: 0, padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: '10px', fontSize: '14px', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div>
+        <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#0d0d0d', margin: '0 0 4px 0', fontFamily: "'Syne', sans-serif", marginTop: 0 }}>Manage Tags</h3>
+        <p style={{ fontSize: '14px', color: '#6b7280', margin: '0' }}>Tags describe style, subject or technique (e.g. Luxury, Minimalist, 3D). They are searchable and can be attached to prompts. New tags are also created automatically when typed in the prompt form.</p>
+      </div>
+
+      {error && <p style={{ color: '#dc2626', fontSize: '14px' }}>{error}</p>}
+
+      <form onSubmit={handleAdd} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '14px', padding: '20px' }}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tag name (e.g. Luxury)" style={fieldStyle} />
+        <button type="submit" disabled={busy} style={{ ...styles.submitBtn, width: 'auto', minWidth: '140px', marginTop: 0 }}>{busy ? 'Adding…' : 'Add Tag'}</button>
+      </form>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        {tags.map((t) => (
+          <span key={t.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '999px', padding: '6px 12px', fontSize: '13px', color: '#374151', fontWeight: 600 }}>
+            #{t.name}
+            <button
+              type="button"
+              onClick={() => handleDelete(t.id)}
+              style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}
+              title="Delete tag"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </span>
+        ))}
+        {tags.length === 0 && <p style={{ color: '#6b7280', fontSize: '14px' }}>No tags yet. Add tags here or type them into the prompt form.</p>}
       </div>
     </div>
   );
